@@ -1,36 +1,38 @@
 use std::ops;
-use glam::{DVec2, DVec3};
+use glam::{Vec2, Vec3};
 use rand::Rng;
-use crate::hittable::{Hittable, MatteSphere};
-use ops::Range;
+use crate::hittable;
+use crate::hittable::Hittable;
+use crate::interval::Interval;
 
 pub struct Ray {
-    pub origin: DVec3,
-    pub direction: DVec3,
+    pub origin: Vec3,
+    pub direction: Vec3,
 }
 
 impl Ray {
-    pub fn new(origin: DVec3, direction: DVec3) -> Self {
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
         Self { origin, direction: direction.normalize() }
     }
 
-    pub fn at(&self, t: f64) -> DVec3 {
+    pub fn at(&self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
 
-    pub fn get_color(&self, depth: u32, world: &Vec<MatteSphere>) -> DVec3 {
+    pub fn get_color(&self, depth: u32, world: &Vec<hittable::HittableSurfaces>) -> Vec3 {
         if depth<=0 {
-            return DVec3::ZERO
+            return Vec3::ZERO
         }
 
-        let mut interval = Range { start: 0.00001, end: f64::INFINITY };
+        let mut interval = Interval { min: 0.00001, max: f32::INFINITY };
 
         if let Some(rec) = world.hit(&self, &mut interval) {
             return rec.scattered.get_color(depth-1, world) * rec.attenuation
+            //return rec.attenuation;
         }
 
-        let bottom = DVec3::splat(0.8);
-        let top = DVec3::new(0.8,0.9,1.);
+        let bottom = Vec3::splat(0.8);
+        let top = Vec3::new(0.8,0.9,1.);
         let t = (self.direction.y + 1.) / 2.;
 
         top * t + bottom * (1.-t)
@@ -38,10 +40,10 @@ impl Ray {
 }
 
 
-pub fn rand_unit_vec() -> DVec3 {
+pub fn rand_unit_vec() -> Vec3 {
     let mut rng = rand::thread_rng();
     loop {
-        let vec = DVec3::new(
+        let vec = Vec3::new(
             rng.gen_range(-1.0..1.),
             rng.gen_range(-1.0..1.),
             rng.gen_range(-1.0..1.),
@@ -53,7 +55,7 @@ pub fn rand_unit_vec() -> DVec3 {
     }
 }
 
-pub fn rand_in_square() -> DVec2 {
+pub fn rand_in_square() -> Vec2 {
     let mut rng = rand::thread_rng();
-    DVec2::new(rng.gen(), rng.gen())
+    Vec2::new(rng.gen(), rng.gen())
 }
