@@ -1,18 +1,20 @@
 use glam::Vec3;
 use crate::hittable::{HitRecord, Hittable};
+use crate::hittable::aabb::Aabb;
 use crate::interval::Interval;
-use crate::ray::{rand_unit_vec, Ray};
+use crate::ray::{Ray};
+use crate::util::rand_unit_vec;
 
-#[derive(Clone, Copy)]
 pub struct MatteSphere {
     origin: Vec3,
     radius: f32,
     attenuation: Vec3,
+    pub bbox: Aabb,
 }
 
 impl MatteSphere {
     pub fn new(origin: Vec3, radius: f32, attenuation: Vec3) -> Self {
-        Self {origin, radius, attenuation}
+        Self {origin, radius, attenuation, bbox: Aabb::new(origin - radius, origin + radius)}
     }
 }
 impl Hittable for MatteSphere {
@@ -31,11 +33,14 @@ impl Hittable for MatteSphere {
                 return None
             }
         }
-
         let point = ray.at(root);
         let norm = (point - self.origin) / self.radius;
         let scattered = Ray::new(point, point + norm + rand_unit_vec());
 
-        Some(HitRecord::new(point, norm, scattered, self.attenuation, root))
+        Some(HitRecord{point, norm, scattered, attenuation: self.attenuation, t: root })
+    }
+
+    fn get_bbox(&self) -> &Aabb {
+        &self.bbox
     }
 }

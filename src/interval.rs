@@ -4,15 +4,25 @@ pub struct Interval {
 }
 
 impl Interval {
-    pub fn new() -> Self {
+    pub fn universe() -> Self {
         Self {
-            min: f32::INFINITY,
-            max: f32::NEG_INFINITY,
+            min: f32::NEG_INFINITY,
+            max: f32::INFINITY,
         }
+    }
+
+    pub fn new(min: f32, max: f32) -> Self {
+        Self {min, max}
     }
 
     pub fn size(&self) -> f32 {
         self.max - self.min
+    }
+
+    pub fn intersect(&self, interval: &Interval) -> Interval {
+        Interval{
+            min: if self.min>interval.min {self.min} else {interval.min},
+            max: if self.max<interval.max {self.max} else {interval.max} }
     }
 
     pub fn contains(&self, x: &f32) -> bool {

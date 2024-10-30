@@ -1,11 +1,11 @@
 use glam::Vec3;
-use crate::hittable::{HitRecord, Hittable};
-use crate::ray::{rand_unit_vec, Ray};
+use crate::ray::{Ray};
 use crate::interval::Interval;
 use crate::util::{min, max};
 
+
 pub struct Aabb {
-    x: Interval,
+    pub x: Interval,
     y: Interval,
     z: Interval,
 }
@@ -35,10 +35,8 @@ impl Aabb {
         if n == 1 { return &self.y }
         &self.z
     }
-}
 
-impl Hittable for Aabb {
-    fn hit(&self, ray: &Ray, ray_t: &mut Interval) -> bool {
+    pub(crate) fn hit(&self, ray: &Ray, ray_t: &mut Interval) -> bool {
         let ray_orig = ray.origin;
         let ray_dir = ray.direction;
 
@@ -56,6 +54,7 @@ impl Hittable for Aabb {
         }
 
         true
-        
+
     }
 }
+

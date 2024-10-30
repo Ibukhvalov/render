@@ -1,6 +1,7 @@
 use glam::Vec3;
-use crate::ray::{rand_in_square, Ray};
-use crate::hittable;
+use crate::ray::{Ray};
+use crate::hittable::HittableSurfaces;
+use crate::util::rand_in_square;
 
 pub struct Camera {
     lower_left_corner: Vec3,
@@ -43,7 +44,7 @@ impl Camera {
         }
     }
 
-    pub fn render_to_out(&self, world: &Vec<hittable::HittableSurfaces>, width: u32, height: u32, samples_per_pixel: u32) {
+    pub fn render_to_out(&self, world: Vec<HittableSurfaces>, width: u32, height: u32, samples_per_pixel: u32) {
         println!("P3\n{width} {height}\n255");
 
 
@@ -53,7 +54,7 @@ impl Camera {
                 for _s in 0..samples_per_pixel {
                     let rnd = rand_in_square();
                     col += self.get_ray((i as f32 + rnd.x) / width as f32 , (j as f32 + rnd.y) / height as f32 )
-                        .get_color(5, world);
+                        .get_color(10, &world);
                 }
                 col *= (samples_per_pixel as f32).recip();
                 let ir = (col.x * 255.99) as u32;
