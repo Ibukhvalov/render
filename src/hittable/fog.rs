@@ -43,7 +43,7 @@ impl Hittable for Fog {
                     point,
                     norm: Default::default(),
                     scattered: Ray::new(point, rand_unit_vec()),
-                    attenuation: Vec3::new(0.9,0.,0.),
+                    attenuation: rec1.attenuation,
                     t,
                 })
             };

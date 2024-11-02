@@ -9,6 +9,7 @@ mod camera;
 mod interval;
 mod util;
 
+
 use crate::hittable::fog::Fog;
 
 fn main() {
@@ -16,7 +17,7 @@ fn main() {
     const IMG_WIDTH: u32 = 200;
     const IMG_HEIGHT: u32 = (IMG_WIDTH as f32 / ASPECT) as u32;
 
-
+    // read from vdb file
     /*
     let filename = std::env::args()
         .nth(1)
@@ -43,22 +44,18 @@ fn main() {
         })
         .collect();
     */
-    let red_sun = HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::Y, 1., Vec3::new(0.5,0.8,0.8)));
-    let sun = HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,2.,-200.), 100., Vec3::new(1.,0.9,0.4)));
-    let cloud1 = HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(3.,3.,1.), 1., Vec3::splat(0.9)));
+    let cloud = HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,2.,-1.), 2., Vec3::splat(0.9)));
 
     let world = vec![
         HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,-1000.,0.), 1000., Vec3::new(0.2,0.5,0.9))),
-        sun,
-        cloud1,
-        HittableSurfaces::Fog(Fog::new(red_sun, 0.35)),
+        HittableSurfaces::Fog(Fog::new(cloud, 0.8)),
     ];
 
 
 
     let camera = Camera::new(Vec3::new(0.,1., 3.), Vec3::new(0.,1.5,0.), Vec3::Y, 90., ASPECT);
 
-    camera.render_to_out(world, IMG_WIDTH, IMG_HEIGHT, 20);
+    camera.render_to_out(world, IMG_WIDTH, IMG_HEIGHT, 200);
 
 
 

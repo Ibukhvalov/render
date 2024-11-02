@@ -6,7 +6,6 @@ use crate::interval::Interval;
 pub mod matte_sphere;
 pub mod fog;
 pub mod aabb;
-mod sun;
 
 use matte_sphere::MatteSphere;
 use crate::hittable::fog::Fog;
@@ -41,7 +40,6 @@ pub trait Hittable {
 pub enum HittableSurfaces {
     MatteSphere(MatteSphere),
     Fog(Fog),
-    Sun(Sun),
 }
 
 
