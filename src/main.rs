@@ -1,4 +1,7 @@
+use std::fs::File;
+use std::io::BufReader;
 use glam::Vec3;
+use vdb_rs::VdbReader;
 use crate::camera::Camera;
 use hittable::matte_sphere::MatteSphere;
 use crate::hittable::{ HittableSurfaces};
@@ -11,17 +14,18 @@ mod util;
 
 
 use crate::hittable::fog::Fog;
+use crate::hittable::bvh::BVH;
 
 fn main() {
-    const ASPECT: f32 = 16./9.;
-    const IMG_WIDTH: u32 = 200;
+    const ASPECT: f32 = 14./9.;
+    const IMG_WIDTH: u32 = 400;
     const IMG_HEIGHT: u32 = (IMG_WIDTH as f32 / ASPECT) as u32;
 
     // read from vdb file
-    /*
     let filename = std::env::args()
         .nth(1)
         .expect("Missing VDB filename as first argument");
+
 
     let f = File::open(filename).unwrap();
     let mut vdb_reader = VdbReader::new(BufReader::new(f)).unwrap();
@@ -32,31 +36,38 @@ fn main() {
 
     let grid = vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap();
 
-    let world: Vec<HittableSurfaces> = grid
+    let mut world: Vec<HittableSurfaces> = grid
         .iter()
-        .map(|(pos, voxel, level)| {
+        .map(|(pos, _voxel, level)| {
             let pos_vec3 = Vec3::new(pos.x, pos.y, pos.z);
             HittableSurfaces::MatteSphere(MatteSphere::new(
                 (pos_vec3 + level.scale()) * 0.1,
                 level.scale()*0.1,
-                Vec3::splat(0.3),
+                Vec3::splat(0.4),
             ))
         })
         .collect();
-    */
-    let cloud = HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,2.,-1.), 2., Vec3::splat(0.9)));
 
-    let world = vec![
-        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,-1000.,0.), 1000., Vec3::new(0.2,0.5,0.9))),
-        HittableSurfaces::Fog(Fog::new(cloud, 0.8)),
+
+    /*
+
+    let mut world = vec![
+        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,-1000.,0.), 1000., Vec3::new(0.5,0.5,0.5))),
+        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,1.,0.), 1., Vec3::new(0.9,0.1,0.9))),
+        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(2.,1.,0.), 1., Vec3::new(0.1,0.5,0.9))),
+        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(-2.,1.,0.), 1., Vec3::new(0.6,0.1,0.6))),
+        HittableSurfaces::MatteSphere(MatteSphere::new(Vec3::new(0.,3.,0.), 1., Vec3::new(0.2,0.5,0.1))),
+
     ];
 
 
+    */
+    eprintln!("[1/2]🌳 Building bvh with {} objects", world.len());
+    world = vec![HittableSurfaces::BVH(BVH::init_from_vec(world, 0))];
 
-    let camera = Camera::new(Vec3::new(0.,1., 3.), Vec3::new(0.,1.5,0.), Vec3::Y, 90., ASPECT);
+    let camera = Camera::new(Vec3::new(-5.,15., 70.), Vec3::new(-5.,22.5, 0.), Vec3::Y, 60., ASPECT);
 
     camera.render_to_out(world, IMG_WIDTH, IMG_HEIGHT, 200);
-
 
 
 }

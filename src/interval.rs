@@ -1,3 +1,5 @@
+
+#[derive(Clone)]
 pub struct Interval {
     pub min: f32,
     pub max: f32,

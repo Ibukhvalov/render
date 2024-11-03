@@ -2,6 +2,7 @@ use glam::Vec3;
 use crate::ray::{Ray};
 use crate::hittable::HittableSurfaces;
 use crate::util::rand_in_square;
+use indicatif::ProgressBar;
 
 pub struct Camera {
     lower_left_corner: Vec3,
@@ -46,7 +47,10 @@ impl Camera {
 
     pub fn render_to_out(&self, world: Vec<HittableSurfaces>, width: u32, height: u32, samples_per_pixel: u32) {
         println!("P3\n{width} {height}\n255");
-
+        
+        eprintln!("[2/2]🔺 Rendering...");
+        let number_of_pixels = height*width;
+        let pb = ProgressBar::new(number_of_pixels as u64);
 
         for j in (0..height).rev() {
             for i in 0..width {
@@ -54,7 +58,7 @@ impl Camera {
                 for _s in 0..samples_per_pixel {
                     let rnd = rand_in_square();
                     col += self.get_ray((i as f32 + rnd.x) / width as f32 , (j as f32 + rnd.y) / height as f32 )
-                        .get_color(10, &world);
+                        .get_color(7, &world);
                 }
                 col *= (samples_per_pixel as f32).recip();
                 let ir = (col.x * 255.99) as u32;
@@ -63,6 +67,8 @@ impl Camera {
 
                 println!("{ir} {ig} {ib}");
             }
+            pb.inc(width as u64);
         }
+        pb.finish_with_message("✅ Complete!");
     }
 }

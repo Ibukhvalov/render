@@ -52,7 +52,7 @@ impl Hittable for Fog {
         None
     }
 
-    fn get_bbox(&self) -> &Aabb {
+    fn get_bbox(&self) -> Option<Aabb> {
         self.boundaries.get_bbox()
     }
 }

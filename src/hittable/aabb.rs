@@ -2,9 +2,8 @@ use std::mem::swap;
 use glam::Vec3;
 use crate::ray::{Ray};
 use crate::interval::Interval;
-use crate::util::{min, max};
 
-
+#[derive(Clone, Copy)]
 pub struct Aabb {
     pub min: Vec3,
     pub max: Vec3,
@@ -25,9 +24,9 @@ impl Aabb {
                 f32::min(a.min.y, b.min.y),
                 f32::min(a.min.z, b.min.z)),
             max: Vec3::new(
-                f32::max(a.min.x, b.min.x),
-                f32::max(a.min.y, b.min.y),
-                f32::max(a.min.z, b.min.z)),
+                f32::max(a.max.x, b.max.x),
+                f32::max(a.max.y, b.max.y),
+                f32::max(a.max.z, b.max.z)),
         }
     }
 
@@ -50,7 +49,7 @@ impl Aabb {
                 )
             };
 
-            if t0 < ray_t.min { ray_t.min = t0; }
+            if t0 > ray_t.min { ray_t.min = t0; }
             if t1 < ray_t.max { ray_t.max = t1; }
 
             if ray_t.size() <= 0. {

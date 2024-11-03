@@ -9,12 +9,11 @@ pub struct MatteSphere {
     origin: Vec3,
     radius: f32,
     attenuation: Vec3,
-    pub bbox: Aabb,
 }
 
 impl MatteSphere {
     pub fn new(origin: Vec3, radius: f32, attenuation: Vec3) -> Self {
-        Self {origin, radius, attenuation, bbox: Aabb::new(origin - radius, origin + radius)}
+        Self {origin, radius, attenuation}
     }
 }
 impl Hittable for MatteSphere {
@@ -33,6 +32,7 @@ impl Hittable for MatteSphere {
                 return None
             }
         }
+
         let point = ray.at(root);
         let norm = (point - self.origin) / self.radius;
         let scattered = Ray::new(point, point + norm + rand_unit_vec());
@@ -40,7 +40,7 @@ impl Hittable for MatteSphere {
         Some(HitRecord{point, norm, scattered, attenuation: self.attenuation, t: root })
     }
 
-    fn get_bbox(&self) -> &Aabb {
-        &self.bbox
+    fn get_bbox(&self) -> Option<Aabb> {
+        Some(Aabb::new(self.origin - self.radius, self.origin + self.radius))
     }
 }
