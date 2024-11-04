@@ -1,4 +1,4 @@
-### Volume rendering
+# Volume rendering
 ## Course-work of Ivan Bukhvalov
 
 output:
