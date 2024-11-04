@@ -1,8 +1,8 @@
 output:
-'''shell
+```shell
 cargo run > ./data/out.ppm
-'''
+```
 from vdb:
-'''shell
+```shell
 cargo run torus.vbd >./data/out.ppm
-'''
+```
