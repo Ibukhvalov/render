@@ -1,3 +1,6 @@
+### Volume rendering
+## Course-work of Ivan Bukhvalov
+
 output:
 ```shell
 cargo run > ./data/out.ppm
