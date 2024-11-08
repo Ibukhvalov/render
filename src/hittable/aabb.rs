@@ -1,7 +1,6 @@
 use crate::interval::Interval;
 use crate::ray::Ray;
 use glam::Vec3;
-use std::mem::swap;
 
 #[derive(Clone, Copy)]
 pub struct Aabb {

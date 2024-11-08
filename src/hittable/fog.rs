@@ -3,7 +3,6 @@ use crate::hittable::{HitRecord, Hittable, HittableSurfaces};
 use crate::interval::Interval;
 use crate::ray::Ray;
 use crate::util::{rand, rand_unit_vec};
-use glam::Vec3;
 
 pub struct Fog {
     boundaries: Box<HittableSurfaces>,

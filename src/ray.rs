@@ -30,7 +30,7 @@ impl Ray {
             max: f32::INFINITY,
         };
 
-        if let Some(rec) = world.hit(&self, &mut interval) {
+        if let Some(rec) = world.hit(self, &mut interval) {
             return rec.scattered.get_color(depth - 1, world) * rec.attenuation;
         }
 

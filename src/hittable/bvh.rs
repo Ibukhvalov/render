@@ -3,7 +3,6 @@ use crate::interval::Interval;
 use crate::ray::Ray;
 use crate::util;
 use aabb::Aabb;
-use glam::Vec3;
 
 enum Node {
     Branch { left: Box<BVH>, right: Box<BVH> },

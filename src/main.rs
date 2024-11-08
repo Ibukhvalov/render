@@ -13,7 +13,6 @@ mod ray;
 mod util;
 
 use crate::hittable::bvh::BVH;
-use crate::hittable::fog::Fog;
 
 fn main() {
     const ASPECT: f32 = 14. / 9.;
