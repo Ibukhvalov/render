@@ -1,8 +1,7 @@
+use crate::hittable::{Hittable, HittableSurfaces};
 use glam::{Vec2, Vec3};
 use rand::Rng;
-use crate::hittable::{Hittable, HittableSurfaces};
 use std::cmp::Ordering;
-
 
 pub fn rand_unit_vec() -> Vec3 {
     let mut rng = rand::thread_rng();
@@ -24,14 +23,12 @@ pub fn rand_in_square() -> Vec2 {
     Vec2::new(rng.gen(), rng.gen())
 }
 
-
 pub fn rand() -> f32 {
     let mut rng = rand::thread_rng();
     rng.gen()
 }
 
-
-pub fn box_compare(axis: usize) -> impl FnMut(&HittableSurfaces,  &HittableSurfaces) -> Ordering {
+pub fn box_compare(axis: usize) -> impl FnMut(&HittableSurfaces, &HittableSurfaces) -> Ordering {
     move |a, b| {
         let abbox = a.get_bbox();
         let bbbox = b.get_bbox();
@@ -51,8 +48,12 @@ pub fn axis_range(hittable_list: &Vec<HittableSurfaces>, axis: usize) -> f32 {
 
     for surface in hittable_list {
         if let Some(bbox) = surface.get_bbox() {
-            if bbox.min[axis] < infinum  { infinum  = bbox.min[axis]; }
-            if bbox.max[axis] > supremum { supremum = bbox.min[axis]; }
+            if bbox.min[axis] < infinum {
+                infinum = bbox.min[axis];
+            }
+            if bbox.max[axis] > supremum {
+                supremum = bbox.min[axis];
+            }
         }
     }
     supremum - infinum

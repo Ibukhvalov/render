@@ -1,9 +1,9 @@
-use glam::Vec3;
-use crate::hittable::{HitRecord, Hittable};
 use crate::hittable::aabb::Aabb;
+use crate::hittable::{HitRecord, Hittable};
 use crate::interval::Interval;
-use crate::ray::{Ray};
+use crate::ray::Ray;
 use crate::util::rand_unit_vec;
+use glam::Vec3;
 
 pub struct MatteSphere {
     origin: Vec3,
@@ -13,7 +13,11 @@ pub struct MatteSphere {
 
 impl MatteSphere {
     pub fn new(origin: Vec3, radius: f32, attenuation: Vec3) -> Self {
-        Self {origin, radius, attenuation}
+        Self {
+            origin,
+            radius,
+            attenuation,
+        }
     }
 }
 impl Hittable for MatteSphere {
@@ -21,15 +25,14 @@ impl Hittable for MatteSphere {
         let oc = ray.origin - self.origin;
         let a = ray.direction.length_squared();
         let b = 2. * oc.dot(ray.direction);
-        let c = oc.length_squared() - self.radius*self.radius;
-        let disc = b*b - 4.*a*c;
+        let c = oc.length_squared() - self.radius * self.radius;
+        let disc = b * b - 4. * a * c;
 
-
-        let mut root = ( -b - disc.sqrt() ) / (2. * a);
+        let mut root = (-b - disc.sqrt()) / (2. * a);
         if !interval.contains(&root) {
-            root = ( -b + disc.sqrt() ) / (2. * a);
+            root = (-b + disc.sqrt()) / (2. * a);
             if !interval.contains(&root) {
-                return None
+                return None;
             }
         }
 
@@ -37,10 +40,19 @@ impl Hittable for MatteSphere {
         let norm = (point - self.origin) / self.radius;
         let scattered = Ray::new(point, point + norm + rand_unit_vec());
 
-        Some(HitRecord{point, norm, scattered, attenuation: self.attenuation, t: root })
+        Some(HitRecord {
+            point,
+            norm,
+            scattered,
+            attenuation: self.attenuation,
+            t: root,
+        })
     }
 
     fn get_bbox(&self) -> Option<Aabb> {
-        Some(Aabb::new(self.origin - self.radius, self.origin + self.radius))
+        Some(Aabb::new(
+            self.origin - self.radius,
+            self.origin + self.radius,
+        ))
     }
 }
