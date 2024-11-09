@@ -21,21 +21,10 @@ impl Fog {
 }
 impl Hittable for Fog {
     fn hit(&self, ray: &Ray, interval: &mut Interval) -> Option<HitRecord> {
-        if let Some(mut rec1) = self.boundaries.hit(ray, &mut Interval::universe()) {
-            if let Some(rec2) = self.boundaries.hit(
-                ray,
-                &mut Interval {
-                    min: rec1.t + 0.0001,
-                    max: f32::INFINITY,
-                },
-            ) {
-                let hitable_t: Interval = Interval::new(rec1.t, rec2.t).intersect(interval);
-                if hitable_t.size() < 0. {
-                    return None;
-                }
+        if let Some(mut rec) = self.boundaries.hit(ray, &mut Interval::ray()) {
 
                 let ray_length = ray.direction.length();
-                let dist_in_boundary = hitable_t.size() * ray_length;
+                let dist_in_boundary = rec.t.size() * ray_length;
                 let hit_dist = self.neg_inv_density * rand().log(std::f32::consts::E);
 
                 //let test = rand();
@@ -44,21 +33,14 @@ impl Hittable for Fog {
                 if hit_dist > dist_in_boundary {
                     return None;
                 };
-                if rec1.t < 0. {
-                    rec1.t = 0.
-                }
 
-                let t = rec1.t + hit_dist / ray_length;
+                let t = rec.t.min + hit_dist / ray_length;
                 let point = ray.at(t);
 
                 return Some(HitRecord {
-                    point,
-                    norm: Default::default(),
                     scattered: Ray::new(point, rand_unit_vec()),
-                    attenuation: rec1.attenuation,
-                    t,
+                    ..rec
                 });
-            };
         };
 
         None
