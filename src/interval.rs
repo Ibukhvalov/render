@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Copy, Default)]
 pub struct Interval {
     pub min: f32,
     pub max: f32,
@@ -8,6 +8,13 @@ impl Interval {
     pub fn universe() -> Self {
         Self {
             min: f32::NEG_INFINITY,
+            max: f32::INFINITY,
+        }
+    }
+    
+    pub fn ray() -> Self {
+        Self {
+            min: 0.,
             max: f32::INFINITY,
         }
     }
@@ -22,16 +29,8 @@ impl Interval {
 
     pub fn intersect(&self, interval: &Interval) -> Interval {
         Interval {
-            min: if self.min > interval.min {
-                self.min
-            } else {
-                interval.min
-            },
-            max: if self.max < interval.max {
-                self.max
-            } else {
-                interval.max
-            },
+            min: self.min.max(interval.min),
+            max: self.max.min(interval.max),
         }
     }
 

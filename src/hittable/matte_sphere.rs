@@ -28,24 +28,22 @@ impl Hittable for MatteSphere {
         let c = oc.length_squared() - self.radius * self.radius;
         let disc = b * b - 4. * a * c;
 
-        let mut root = (-b - disc.sqrt()) / (2. * a);
-        if !interval.contains(&root) {
-            root = (-b + disc.sqrt()) / (2. * a);
-            if !interval.contains(&root) {
-                return None;
-            }
+        let root1 = (-b - disc.sqrt()) / (2. * a);
+        let root2 = (-b + disc.sqrt()) / (2. * a);
+        
+        let hit_interval = interval.intersect(&Interval::new(root1, root2));
+        if(disc < 0. || hit_interval.size() < 0.) {
+            return None;
         }
 
-        let point = ray.at(root);
+        let point = ray.at(hit_interval.min);
         let norm = (point - self.origin) / self.radius;
         let scattered = Ray::new(point, point + norm + rand_unit_vec());
 
         Some(HitRecord {
-            point,
-            norm,
             scattered,
             attenuation: self.attenuation,
-            t: root,
+            t: hit_interval,
         })
     }
 

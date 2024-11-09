@@ -67,7 +67,7 @@ impl Hittable for BVH {
                 Node::Branch { left, right } => {
                     let left = left.hit(ray, interval);
                     if let Some(l) = &left {
-                        interval.max = l.t;
+                        interval.max = l.t.min;
                     }
                     let right = right.hit(ray, interval);
                     if right.is_some() {

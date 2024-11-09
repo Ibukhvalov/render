@@ -13,23 +13,9 @@ use matte_sphere::MatteSphere;
 
 #[derive(Default, Clone, Copy)]
 pub struct HitRecord {
-    pub point: Vec3,
-    pub norm: Vec3,
     pub scattered: Ray,
     pub attenuation: Vec3,
-    pub t: f32,
-}
-
-impl HitRecord {
-    pub fn new(point: Vec3, norm: Vec3, scattered: Ray, attenuation: Vec3, t: f32) -> Self {
-        Self {
-            point,
-            norm,
-            scattered,
-            attenuation,
-            t,
-        }
-    }
+    pub t: Interval,
 }
 
 pub trait Hittable {
@@ -66,7 +52,7 @@ impl Hittable for Vec<HittableSurfaces> {
         let mut rec = None;
         for surface in self.iter() {
             if let Some(cur_rec) = surface.hit(ray, interval) {
-                interval.max = cur_rec.t;
+                interval.max = cur_rec.t.max;
                 rec = Some(cur_rec);
             }
         }

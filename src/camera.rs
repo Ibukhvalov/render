@@ -39,11 +39,7 @@ impl Camera {
     }
 
     fn get_ray(&self, u: f32, v: f32) -> Ray {
-        Ray {
-            origin: self.look_from,
-            direction: self.lower_left_corner + u * self.horizontal + v * self.vertical
-                - self.look_from,
-        }
+        Ray::new(self.look_from,self.lower_left_corner + u * self.horizontal + v * self.vertical - self.look_from)
     }
 
     pub fn render_to_out(
