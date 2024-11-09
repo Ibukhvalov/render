@@ -61,7 +61,7 @@ impl BVH {
 
 impl Hittable for BVH {
     fn hit(&self, ray: &Ray, interval: &mut Interval) -> Option<HitRecord> {
-        if self.bbox.hit(ray, &mut interval.clone()) {
+        if self.bbox.hit(ray, &interval) {
             match &self.node {
                 Node::Leaf(surface) => surface.hit(ray, interval),
                 Node::Branch { left, right } => {

@@ -28,9 +28,11 @@ impl Aabb {
         }
     }
 
-    pub fn hit(&self, ray: &Ray, ray_t: &mut Interval) -> bool {
+    pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> bool {
         let ray_orig = ray.origin;
         let ray_dir = ray.direction;
+        
+        let mut interval = ray_t.clone();
 
         for axis in 0..3 {
             let inv_d = ray_dir[axis].recip();
@@ -46,14 +48,14 @@ impl Aabb {
                 )
             };
 
-            if t0 > ray_t.min {
-                ray_t.min = t0;
+            if t0 > interval.min {
+                interval.min = t0;
             }
-            if t1 < ray_t.max {
-                ray_t.max = t1;
+            if t1 < interval.max {
+                interval.max = t1;
             }
 
-            if ray_t.size() <= 0. {
+            if interval.size() <= 0. {
                 return false;
             }
         }
