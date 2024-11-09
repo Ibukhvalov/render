@@ -58,7 +58,7 @@ fn main() {
 
     */
     eprintln!("[1/2]🌳 Building bvh with {} objects", world.len());
-    world = vec![HittableSurfaces::BVH(BVH::init_from_vec(world, 0))];
+    world = vec![HittableSurfaces::BVH(BVH::init_from_vec(world))];
 
     let camera = Camera::new(
         Vec3::new(-5., 15., 70.),
@@ -68,5 +68,5 @@ fn main() {
         ASPECT,
     );
 
-    camera.render_to_out(world, IMG_WIDTH, IMG_HEIGHT, 200);
+    camera.render_to_out(world, IMG_WIDTH, IMG_HEIGHT, 20);
 }

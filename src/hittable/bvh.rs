@@ -12,11 +12,10 @@ enum Node {
 pub struct BVH {
     pub node: Node,
     pub bbox: Aabb,
-    pub deep: u32,
 }
 
 impl BVH {
-    pub fn init_from_vec(mut hittable_list: Vec<HittableSurfaces>, deep: u32) -> Self {
+    pub fn init_from_vec(mut hittable_list: Vec<HittableSurfaces>) -> Self {
         let len = hittable_list.len();
 
         let mut axis_ranges: Vec<(usize, f32)> = (0..3)
@@ -39,15 +38,14 @@ impl BVH {
                     BVH {
                         node: Node::Leaf(Box::new(surface)),
                         bbox,
-                        deep,
                     }
                 } else {
                     panic!("no bbox in surface")
                 }
             }
             _ => {
-                let right = BVH::init_from_vec(hittable_list.drain(len / 2..).collect(), deep + 1);
-                let left = BVH::init_from_vec(hittable_list, deep + 1);
+                let right = BVH::init_from_vec(hittable_list.drain(len / 2..).collect());
+                let left = BVH::init_from_vec(hittable_list);
                 let bbox = Aabb::unit(&left.get_bbox().unwrap(), &right.get_bbox().unwrap());
                 BVH {
                     node: Node::Branch {
@@ -55,7 +53,6 @@ impl BVH {
                         right: Box::new(right),
                     },
                     bbox,
-                    deep,
                 }
             }
         }
