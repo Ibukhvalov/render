@@ -28,7 +28,7 @@ impl Aabb {
         }
     }
 
-    pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> bool {
+    pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> Option<Interval> {
         let ray_orig = ray.origin;
         let ray_dir = ray.direction;
         
@@ -56,10 +56,10 @@ impl Aabb {
             }
 
             if interval.size() <= 0. {
-                return false;
+                return None;
             }
         }
 
-        true
+        Some(interval)
     }
 }

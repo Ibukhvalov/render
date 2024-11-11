@@ -3,19 +3,34 @@ use crate::ray::Ray;
 use aabb::Aabb;
 use glam::Vec3;
 pub mod aabb;
-pub(crate) mod bvh;
+pub mod bvh;
 pub mod fog;
 pub mod matte_sphere;
+mod grid;
+mod light_sphere;
 
 use crate::hittable::bvh::BVH;
 use crate::hittable::fog::Fog;
 use matte_sphere::MatteSphere;
+use crate::hittable::grid::Grid;
 
-#[derive(Default, Clone, Copy)]
-pub struct HitRecord {
+#[derive(Clone, Copy)]
+enum HitRecord {
+    Scattered(ScatteredRecord),
+    Attenuated(AttenuatedRecord),
+}
+
+
+#[derive(Clone, Copy)]
+pub struct ScatteredRecord {
     pub scattered: Ray,
     pub attenuation: Vec3,
     pub t: Interval,
+}
+
+pub struct AttenuatedRecord {
+    pub emitted: Ray,
+    
 }
 
 pub trait Hittable {
@@ -27,6 +42,7 @@ pub enum HittableSurfaces {
     MatteSphere(MatteSphere),
     Fog(Fog),
     BVH(BVH),
+    Grid(Grid),
 }
 
 impl Hittable for HittableSurfaces {
