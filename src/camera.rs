@@ -1,8 +1,10 @@
-use crate::hittable::HittableSurfaces;
+
 use crate::ray::Ray;
 use crate::util::rand_in_square;
 use glam::Vec3;
 use indicatif::ProgressBar;
+use crate::hittable::grid::VolumeGrid;
+use crate::interval::Interval;
 
 pub struct Camera {
     lower_left_corner: Vec3,
@@ -41,19 +43,31 @@ impl Camera {
     fn get_ray(&self, u: f32, v: f32) -> Ray {
         Ray::new(self.look_from,self.lower_left_corner + u * self.horizontal + v * self.vertical - self.look_from)
     }
+    
+    fn write_color(col: Vec3) {
+        let border = Interval::new(0., 0.9999);
+        
+        let ir = (border.clamp(col.x) * 255.99) as u32;
+        let ig = (border.clamp(col.y) * 255.99) as u32;
+        let ib = (border.clamp(col.z) * 255.99) as u32;
+
+        println!("{ir} {ig} {ib}");
+    }
 
     pub fn render_to_out(
         &self,
-        world: Vec<HittableSurfaces>,
+        world: &VolumeGrid,
         width: u32,
         height: u32,
         samples_per_pixel: u32,
     ) {
         println!("P3\n{width} {height}\n255");
 
-        eprintln!("[2/2]🔺 Rendering...");
+        eprintln!("[2/2] 🔺 Rendering...");
         let number_of_pixels = height * width;
         let pb = ProgressBar::new(number_of_pixels as u64);
+        
+        let bgcolor = Vec3::new(0.7,0.7,0.9);
 
         for j in (0..height).rev() {
             for i in 0..width {
@@ -65,14 +79,10 @@ impl Camera {
                             (i as f32 + rnd.x) / width as f32,
                             (j as f32 + rnd.y) / height as f32,
                         )
-                        .get_color(7, &world);
+                        .get_color(&world, &bgcolor);
                 }
                 col *= (samples_per_pixel as f32).recip();
-                let ir = (col.x * 255.99) as u32;
-                let ig = (col.y * 255.99) as u32;
-                let ib = (col.z * 255.99) as u32;
-
-                println!("{ir} {ig} {ib}");
+                Self::write_color(col);
             }
             pb.inc(width as u64);
         }

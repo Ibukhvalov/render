@@ -12,6 +12,7 @@ impl Aabb {
     pub fn new(min: Vec3, max: Vec3) -> Self {
         Self { min, max }
     }
+    
 
     pub fn unit(a: &Aabb, b: &Aabb) -> Self {
         Self {

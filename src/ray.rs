@@ -1,4 +1,4 @@
-use crate::hittable::{Hittable, HittableSurfaces};
+use crate::hittable::grid::VolumeGrid;
 use crate::interval::Interval;
 use glam::Vec3;
 
@@ -20,24 +20,13 @@ impl Ray {
         self.origin + self.direction * t
     }
 
-    pub fn get_color(&self, depth: u32, world: &Vec<HittableSurfaces>) -> Vec3 {
-        if depth == 0 {
-            return Vec3::new(1., 0., 0.);
+
+    pub fn get_color(&self, grid: &VolumeGrid, background_color: &Vec3) -> Vec3 {
+
+        if let Some(rec) = grid.get_color(&self, 2) {
+            return background_color * rec.transparency + rec.resulted_color
         }
 
-        let mut interval = Interval {
-            min: 0.001,
-            max: f32::INFINITY,
-        };
-
-        if let Some(rec) = world.hit(self, &mut interval) {
-            return rec.scattered.get_color(depth - 1, world) * rec.attenuation;
-        }
-
-        let bottom = Vec3::splat(0.5);
-        let top = Vec3::new(0.8, 0.8, 0.9);
-        let t = (self.direction.y + 1.) / 2.;
-
-        top * t + bottom * (1. - t)
+        background_color.clone()
     }
 }
