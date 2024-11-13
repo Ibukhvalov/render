@@ -17,6 +17,8 @@ pub struct VolumeGrid {
 
 impl VolumeGrid {
     pub fn build_from_vdb_grid(vdb_grid: Grid<f16>, base_weight: f32) -> Self {
+        eprintln!("[1/3] 🏽 Building grid...");
+        
         let min_i = vdb_grid.descriptor.aabb_min().unwrap();
         let max_i = vdb_grid.descriptor.aabb_max().unwrap();
 
@@ -25,16 +27,7 @@ impl VolumeGrid {
         let shift = -Vec3::new(min_i.x as f32, min_i.y as f32, min_i.z as f32);
 
         let mut weights = vec![vec![vec![None; length.z as usize +1usize]; length.y as usize+1usize]; length.x as usize+1usize];
-        eprintln!("[1/2] 🏽 Building grid...");
-
-        /*
-        let pb = ProgressBar::new(vdb_grid. as u64);
-
-        pb.inc(width as u64);
-
-        pb.finish_with_message("✅ Complete!");
-
-         */
+        
         for el in vdb_grid.iter() {
             let (pos, _voxel, _level) = el;
 
