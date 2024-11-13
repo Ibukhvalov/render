@@ -1,4 +1,4 @@
-
+use rayon::prelude::*;
 use crate::ray::Ray;
 use crate::util::rand_in_square;
 use glam::Vec3;
@@ -57,8 +57,6 @@ impl Camera {
         height: u32,
         samples_per_pixel: u32,
     ) {
-
-
         let mut imgbuf = image::ImageBuffer::new(width, height);
 
         eprintln!("[2/3] 🔺 Rendering...");
@@ -68,24 +66,24 @@ impl Camera {
         let bgcolor = Vec3::new(0.7,0.7,0.9);
         let border = Interval::new(0., 0.9999);
         for(i, j, pixel) in imgbuf.enumerate_pixels_mut() {
-            let mut col = Vec3::ZERO;
-
-            for _s in 0..samples_per_pixel {
-                let rnd = rand_in_square();
-                col += self
-                    .get_ray(
+            let col = (0..samples_per_pixel).into_par_iter()
+                .map(|_s| {
+                    let rnd = rand_in_square();
+                    self.get_ray(
                         (i as f32 + rnd.x) / width as f32,
                         (j as f32 + rnd.y) / height as f32,
                     )
-                    .get_color(&world, &bgcolor);
-            }
-            col *= (samples_per_pixel as f32).recip();
+                        .get_color(&world, &bgcolor)
+                })
+                .reduce(||Vec3::ZERO, |accum, color| accum + color)
+                * (samples_per_pixel as f32).recip();
+            
             let col_u8: [u8;3] = [(border.clamp(col.x) * 255.99) as u8, (border.clamp(col.y) * 255.99) as u8,(border.clamp(col.z) * 255.99) as u8];
             *pixel = image::Rgb(col_u8);
             pb.inc(1);
         }
         pb.finish();
-        
+
         let path = "data/out.png";
         eprintln!("[3/3] 🖼️ Saving an image -> {path}");
         imgbuf.save(path).unwrap();
