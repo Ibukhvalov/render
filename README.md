@@ -1,11 +1,8 @@
 # Volume rendering
 ## Course-work of Ivan Bukhvalov
 
-### output:
+### from vdb -> ./data/out.png:
 ```shell
-cargo run > ./data/out.ppm
+cargo run torus.vbd
 ```
-### from vdb:
-```shell
-cargo run torus.vbd > ./data/out.ppm
-```
+
