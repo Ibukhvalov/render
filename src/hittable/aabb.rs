@@ -12,7 +12,6 @@ impl Aabb {
     pub fn new(min: Vec3, max: Vec3) -> Self {
         Self { min, max }
     }
-    
 
     pub fn unit(a: &Aabb, b: &Aabb) -> Self {
         Self {
@@ -32,7 +31,7 @@ impl Aabb {
     pub fn hit(&self, ray: &Ray, ray_t: &Interval) -> Option<Interval> {
         let ray_orig = ray.origin;
         let ray_dir = ray.direction;
-        
+
         let mut interval = ray_t.clone();
 
         for axis in 0..3 {

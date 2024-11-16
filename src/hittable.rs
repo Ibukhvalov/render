@@ -6,13 +6,8 @@ pub mod aabb;
 pub(crate) mod grid;
 mod light_sphere;
 
-
-
 #[derive(Clone, Copy)]
 pub struct HitRecord {
     pub transparency: f32,
     pub resulted_color: Vec3,
 }
-
-
-

@@ -1,10 +1,10 @@
-use rayon::prelude::*;
+use crate::hittable::grid::VolumeGrid;
+use crate::interval::Interval;
 use crate::ray::Ray;
 use crate::util::rand_in_square;
 use glam::Vec3;
 use indicatif::ProgressBar;
-use crate::hittable::grid::VolumeGrid;
-use crate::interval::Interval;
+use rayon::prelude::*;
 
 pub struct Camera {
     top_left_corner: Vec3,
@@ -26,8 +26,8 @@ impl Camera {
         let half_height = (vfov * std::f32::consts::PI / 180. / 2.).tan();
         let half_width = half_height * aspect;
 
-        let top_left_corner = look_from - w - half_height*v - half_width*u;
-        let vertical =  v * half_height * 2.;
+        let top_left_corner = look_from - w - half_height * v - half_width * u;
+        let vertical = v * half_height * 2.;
         let horizontal = u * half_width * 2.;
 
         Self {
@@ -40,15 +40,16 @@ impl Camera {
         }
     }
 
-
     // #->(u)#
     // I######
     // v######
     // (v)####
     fn get_ray(&self, u: f32, v: f32) -> Ray {
-        Ray::new(self.look_from,self.top_left_corner + u * self.horizontal + v * self.vertical - self.look_from)
+        Ray::new(
+            self.look_from,
+            self.top_left_corner + u * self.horizontal + v * self.vertical - self.look_from,
+        )
     }
-
 
     pub fn render_to_out(
         &self,
@@ -62,23 +63,28 @@ impl Camera {
         eprintln!("[2/3] 🔺 Rendering...");
         let number_of_pixels = height * width;
         let pb = ProgressBar::new(number_of_pixels as u64);
-        
-        let bgcolor = Vec3::new(0.7,0.7,0.9);
+
+        let bgcolor = Vec3::new(0.7, 0.7, 0.9);
         let border = Interval::new(0., 0.9999);
-        for(i, j, pixel) in imgbuf.enumerate_pixels_mut() {
-            let col = (0..samples_per_pixel).into_par_iter()
+        for (i, j, pixel) in imgbuf.enumerate_pixels_mut() {
+            let col = (0..samples_per_pixel)
+                .into_par_iter()
                 .map(|_s| {
                     let rnd = rand_in_square();
                     self.get_ray(
                         (i as f32 + rnd.x) / width as f32,
                         (j as f32 + rnd.y) / height as f32,
                     )
-                        .get_color(&world, &bgcolor)
+                    .get_color(&world, &bgcolor)
                 })
-                .reduce(||Vec3::ZERO, |accum, color| accum + color)
+                .reduce(|| Vec3::ZERO, |accum, color| accum + color)
                 * (samples_per_pixel as f32).recip();
-            
-            let col_u8: [u8;3] = [(border.clamp(col.x) * 255.99) as u8, (border.clamp(col.y) * 255.99) as u8,(border.clamp(col.z) * 255.99) as u8];
+
+            let col_u8: [u8; 3] = [
+                (border.clamp(col.x) * 255.99) as u8,
+                (border.clamp(col.y) * 255.99) as u8,
+                (border.clamp(col.z) * 255.99) as u8,
+            ];
             *pixel = image::Rgb(col_u8);
             pb.inc(1);
         }

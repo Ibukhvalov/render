@@ -11,7 +11,7 @@ impl Interval {
             max: f32::INFINITY,
         }
     }
-    
+
     pub fn ray() -> Self {
         Self {
             min: 0.,
@@ -26,10 +26,14 @@ impl Interval {
     pub fn size(&self) -> f32 {
         self.max - self.min
     }
-    
+
     pub fn clamp(&self, x: f32) -> f32 {
-        if x < self.min {return self.min; };
-        if x > self.max { return self.max; };
+        if x < self.min {
+            return self.min;
+        };
+        if x > self.max {
+            return self.max;
+        };
         x
     }
 
