@@ -13,8 +13,6 @@ pub struct Camera {
     horizontal: Vec3,
 
     look_from: Vec3,
-    look_at: Vec3,
-    vup: Vec3,
 }
 
 impl Camera {
@@ -35,8 +33,6 @@ impl Camera {
             vertical,
             horizontal,
             look_from,
-            look_at,
-            vup,
         }
     }
 
@@ -64,7 +60,7 @@ impl Camera {
         let number_of_pixels = height * width;
         let pb = ProgressBar::new(number_of_pixels as u64);
 
-        let bgcolor = Vec3::new(0.7, 0.7, 0.9);
+        let bgcolor = Vec3::new(0.572f32, 0.772f32, 0.921f32);
         let border = Interval::new(0., 0.9999);
         for (i, j, pixel) in imgbuf.enumerate_pixels_mut() {
             let col = (0..samples_per_pixel)
@@ -75,7 +71,7 @@ impl Camera {
                         (i as f32 + rnd.x) / width as f32,
                         (j as f32 + rnd.y) / height as f32,
                     )
-                    .get_color(&world, &bgcolor)
+                    .get_color(world, &bgcolor)
                 })
                 .reduce(|| Vec3::ZERO, |accum, color| accum + color)
                 * (samples_per_pixel as f32).recip();

@@ -874,6 +874,7 @@ dependencies = [
  "half",
  "image",
  "indicatif",
+ "num-traits",
  "rand 0.9.0-alpha.2",
  "rayon",
  "vdb-rs",

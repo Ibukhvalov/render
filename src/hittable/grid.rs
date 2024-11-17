@@ -3,7 +3,7 @@ use crate::interval::Interval;
 use crate::ray::Ray;
 use glam::{IVec3, Vec3};
 use half::f16;
-use indicatif::ProgressBar;
+use num_traits::pow;
 use vdb_rs::Grid;
 
 pub struct VolumeGrid {
@@ -45,11 +45,10 @@ impl VolumeGrid {
             bbox,
             weights,
             shift,
-            light_dir: Vec3::new(0.1, 0.2, -1.),
-            light_col: Vec3::splat(0.5),
+            light_dir: Vec3::ONE,
+            light_col: Vec3::new(1.0, 0.9, 0.6),
         }
     }
-
     fn get_weight(&self, pos: Vec3) -> Option<f32> {
         let indexes = pos + self.shift;
         self.weights[indexes.x.floor() as usize][indexes.y.floor() as usize]
@@ -72,6 +71,9 @@ impl VolumeGrid {
             let ns = ((t1 - t0) / step_size).round() as u32;
 
             for n in 0..ns {
+                if transparency <= 0.001 {
+                    break;
+                }
                 let t = t1.min(t0 + step_size * (n as f32 + 0.5));
                 let sample_pos = ray.at(t);
                 if let Some(sample_weight) = self.get_weight(sample_pos) {
@@ -95,7 +97,8 @@ impl VolumeGrid {
         None
     }
 
+    #[allow(dead_code)]
     fn get_bbox(&self) -> Option<Aabb> {
-        Some(self.bbox.clone())
+        Some(self.bbox)
     }
 }

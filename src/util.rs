@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3};
 use rand::Rng;
-use std::cmp::Ordering;
 
+#[allow(dead_code)]
 pub fn rand_unit_vec() -> Vec3 {
     let mut rng = rand::thread_rng();
     loop {
@@ -19,10 +19,5 @@ pub fn rand_unit_vec() -> Vec3 {
 
 pub fn rand_in_square() -> Vec2 {
     let mut rng = rand::thread_rng();
-    Vec2::new(rng.gen(), rng.gen())
-}
-
-pub fn rand() -> f32 {
-    let mut rng = rand::thread_rng();
-    rng.gen()
+    Vec2::new(rng.random(), rng.random())
 }

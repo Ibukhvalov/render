@@ -13,6 +13,7 @@ impl Aabb {
         Self { min, max }
     }
 
+    #[allow(dead_code)]
     pub fn unit(a: &Aabb, b: &Aabb) -> Self {
         Self {
             min: Vec3::new(
@@ -32,7 +33,7 @@ impl Aabb {
         let ray_orig = ray.origin;
         let ray_dir = ray.direction;
 
-        let mut interval = ray_t.clone();
+        let mut interval = *ray_t;
 
         for axis in 0..3 {
             let inv_d = ray_dir[axis].recip();

@@ -1,5 +1,4 @@
 use crate::hittable::grid::VolumeGrid;
-use crate::interval::Interval;
 use glam::Vec3;
 
 #[derive(Default, Clone, Copy)]
@@ -21,10 +20,10 @@ impl Ray {
     }
 
     pub fn get_color(&self, grid: &VolumeGrid, background_color: &Vec3) -> Vec3 {
-        if let Some(rec) = grid.get_color(&self, 2) {
+        if let Some(rec) = grid.get_color(self, 2) {
             return background_color * rec.transparency + rec.resulted_color;
         }
 
-        background_color.clone()
+        *background_color
     }
 }
