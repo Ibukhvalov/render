@@ -1,9 +1,8 @@
 use crate::hittable::{Aabb, HitRecord};
 use crate::interval::Interval;
 use crate::ray::Ray;
-use glam::{IVec3, Vec3};
+use glam::Vec3;
 use half::f16;
-use num_traits::pow;
 use vdb_rs::Grid;
 
 pub struct VolumeGrid {
@@ -46,7 +45,7 @@ impl VolumeGrid {
             weights,
             shift,
             light_dir: Vec3::ONE,
-            light_col: Vec3::new(1.0, 0.9, 0.6),
+            light_col: Vec3::new(0.9, 0.75, 0.6),
         }
     }
     fn get_weight(&self, pos: Vec3) -> Option<f32> {
