@@ -3,6 +3,8 @@ use crate::interval::Interval;
 use crate::ray::Ray;
 use glam::Vec3;
 use half::f16;
+use crate::util::cos_between;
+use std::f32::consts::PI;
 use vdb_rs::Grid;
 
 pub struct VolumeGrid {
@@ -11,6 +13,9 @@ pub struct VolumeGrid {
     shift: Vec3,
     light_dir: Vec3,
     light_col: Vec3,
+    absorption: f32,
+    scattering: f32,
+    g: f32,
 }
 
 impl VolumeGrid {
@@ -45,8 +50,18 @@ impl VolumeGrid {
             weights,
             shift,
             light_dir: Vec3::ONE,
-            light_col: Vec3::new(0.9, 0.75, 0.6),
+            light_col: Vec3::new(3.0, 0.0, 0.0),
+            absorption: 0.1,
+            scattering: 0.8,
+            g: 0.6,
         }
+    }
+
+    // the Henyey-Greenstein phase function
+    fn phase(&self, cos_theta: f32) -> f32 {
+        let g = self.g;
+        let denom = 1f32 + g * g - 2f32 * g * cos_theta;
+        1f32 / (4f32 * PI) * (1f32 - g * g) / (denom * denom.sqrt())
     }
     fn get_weight(&self, pos: Vec3) -> Option<f32> {
         let indexes = pos + self.shift;
@@ -75,15 +90,17 @@ impl VolumeGrid {
                 }
                 let t = t1.min(t0 + step_size * (n as f32 + 0.5));
                 let sample_pos = ray.at(t);
-                if let Some(sample_weight) = self.get_weight(sample_pos) {
-                    let sample_transparency = (-step_size * sample_weight).exp();
+                //if (sample_pos).length_squared() <= 100f32 {
+                if let Some(sample_density) = self.get_weight(sample_pos) {
+                    let sample_transparency = (-step_size * sample_density * (self.scattering * self.absorption)).exp();
                     transparency *= sample_transparency;
 
                     if let Some(rec) =
                         self.get_color(&Ray::new(sample_pos, self.light_dir), depth - 1)
                     {
                         let light_attenuation = rec.transparency;
-                        result += transparency * self.light_col * light_attenuation * step_size;
+                        let cos_theta = cos_between(&ray.direction, &self.light_dir);
+                        result += transparency * self.light_col * light_attenuation * step_size * sample_density * self.phase(cos_theta) * self.scattering;
                     }
                 }
             }

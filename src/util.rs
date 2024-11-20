@@ -21,3 +21,7 @@ pub fn rand_in_square() -> Vec2 {
     let mut rng = rand::thread_rng();
     Vec2::new(rng.random(), rng.random())
 }
+
+pub fn cos_between(a: &Vec3, b: &Vec3) -> f32 {
+    a.dot(*b) / a.length() / b.length()
+}

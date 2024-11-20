@@ -27,15 +27,15 @@ fn get_view_positions_from_to(descriptor: &GridDescriptor, vfov: f32) -> (Vec3,V
     (camera_pos, center)
 }
 
-fn load_vdb_grid_from_args() -> Grid<half::f16>{
-    let filename = std::env::args()
-        .nth(1)
-        .expect("Missing VDB filename as first argument");
-
-    let mut vdb_reader = VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
-    let grid_to_load = vdb_reader.available_grids().first().cloned().unwrap_or(String::new());
-    vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap()
-}
+    fn load_vdb_grid_from_args() -> Grid<half::f16>{
+        let filename = std::env::args()
+            .nth(1)
+            .expect("Missing VDB filename as first argument");
+    
+        let mut vdb_reader = VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
+        let grid_to_load = vdb_reader.available_grids().first().cloned().unwrap_or(String::new());
+        vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap()
+    }
 
 
 
@@ -47,8 +47,9 @@ fn main() {
 
 
     let grid_vdb = load_vdb_grid_from_args();
-    let (camera_pos, target_pos) = get_view_positions_from_to(&grid_vdb.descriptor, VFOV);
+//    let (camera_pos, target_pos) = get_view_positions_from_to(&grid_vdb.descriptor, VFOV);
 
+    let (camera_pos, target_pos) = (Vec3::new(0.0,0.0,100.0), Vec3::ZERO);
     let grid = VolumeGrid::build_from_vdb_grid(grid_vdb, 0.5);
 
     let camera = Camera::new(camera_pos, target_pos, Vec3::Y, VFOV, ASPECT);
