@@ -1,11 +1,36 @@
 [package]
-name = "render"
+name = "strela-rs"
 version = "0.1.0"
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
+egui = {version = "0.29.1", feature = ["wgpu"]}
+catppuccin-egui = { version = "5.3.0", default-features = false, features = ["egui29"] }
+eframe = {version = "0.29.1", default-features = false, features = ["wgpu", "persistence"]}
+egui-wgpu = "0.29.1"
+egui_tiles = "0.10.1"
+log = { version = "0.4.22", features = ["std"] }
+env_logger = "0.11.5"
+# bytemuck = { version = "1.7.1", optional = true }
+bytemuck = "1.18.0"
+rfd = "0.15.0"
+single_value_channel = "1.2.2"
+crossbeam-channel = "0.5.13"
+nalgebra-glm = "0.19.0"
+anyhow = "1.0.89"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+
 glam = "0.29.0"
 rand = "0.9.0-alpha.2"
 vdb-rs = "0.6.0"
 half = "2.4.1"
 indicatif = "0.17.8"
+image = "0.25.5"
+rayon = "1.10.0"
+num-traits = "0.2.19"
+
+# [features]
+# default = ["wgpu"]
