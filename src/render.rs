@@ -70,12 +70,14 @@ impl PathTracerRenderContext {
 pub struct Renderer {
     camera: Camera,
     scene: Scene,
+    samples_per_pixel: u32,
 }
 
 impl Renderer {
     pub fn new() -> Self {
         let camera = Camera::new(glamVec3::new(0.,0.,100.), glamVec3::ZERO, glamVec3::Y, 80., 1.0);
         Self {
+            samples_per_pixel: 3,
             camera,
             scene: Scene::new(glamVec3::new(0.6,0.6,0.9)),
         }
@@ -83,35 +85,31 @@ impl Renderer {
 }
 
 impl Renderer {
-    pub fn run_iteration(&mut self, pt_ctx: &mut PathTracerRenderContext) {
-        let camera_matrix = pt_ctx.input_rx.latest();
-        //info!("camera matrix: {}", camera_matrix);
-
-        let mut samples_per_pixel = 3;
-
-        // copy all settings here
-        if let Ok(settings) = pt_ctx.settings.lock() {
+    
+    fn update_settings(&mut self, pt_ctx: &mut PathTracerRenderContext) {
+        if let Ok(mut settings) = pt_ctx.settings.lock() {
+            if let Some(path) = &settings.picked_path {
+                self.scene.update_scene(path);
+                self.camera.focus_on(self.scene.get_bbox());
+                settings.picked_path = None;
+            }
             self.scene.background = glamVec3::new(settings.color[0], settings.color[1], settings.color[2]);
             self.scene.grid.g = settings.g;
             self.scene.grid.absorption = settings.absorption;
             self.scene.grid.scattering = settings.scattering;
-            samples_per_pixel = settings.spp.ceil() as u32;
+            self.samples_per_pixel = settings.spp.ceil() as u32;
+            self.camera.update_dist(settings.dist);
         } else {
             error!("Could not acquire settings lock, skipping this frame.");
         }
-
-
-        let border = Interval::new(0., 0.9999);
-
-
+    }
+    pub fn run_iteration(&mut self, pt_ctx: &mut PathTracerRenderContext) {
+        let camera_matrix = pt_ctx.input_rx.latest();
         let mut image_data = pt_ctx.image_data.lock().unwrap().clone();
-
+        self.update_settings(pt_ctx);
+        let border = Interval::new(0., 0.9999);
         let (width, height) = (pt_ctx.result_width, pt_ctx.result_height);
-
-        info!("update {width} {height}");
-
-        let image_aspect = width as f32 / height as f32;
-        self.camera.update(80., image_aspect);
+        
         
         let mut current_progress: f32 = 0.;
         let progress_step_row: f32 = (height as f32).recip();
@@ -125,7 +123,7 @@ impl Renderer {
             }
             
             for i in 0..width {
-                let col_vec3 = (0..samples_per_pixel)
+                let col_vec3 = (0..self.samples_per_pixel)
                     .into_par_iter()
                     .map(|_s| {
                         let rnd = rand_in_square();
@@ -136,7 +134,7 @@ impl Renderer {
                         self.scene.get_color(ray)
                     })
                     .reduce(|| glamVec3::ZERO, |accum, color| accum + color)
-                    * (samples_per_pixel as f32).recip();
+                    * (self.samples_per_pixel as f32).recip();
 
                 let col = Color::new(border.clamp(col_vec3.x), border.clamp(col_vec3.y), border.clamp(col_vec3.z), 1f32);
                 image_data[(j * pt_ctx.result_width + i) as usize] = col;

@@ -262,8 +262,9 @@ struct Settings {
     absorption: f32,
     scattering: f32,
     spp: f32,
-
     progress: f32,
+    dist: f32,
+    picked_path: Option<String>,
 }
 
 #[derive(Debug)]
@@ -321,6 +322,8 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     
                     ui.add(egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"));
 
+                    ui.add(egui::Slider::new(&mut settings.dist, 1.0..=1000.0).text("dist from target center"));
+
                     ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));                    
                     
                 } else {
@@ -344,8 +347,8 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                         egui::Vec2::new(width, heigth - 20.0f32),
                         egui::Sense::drag(),
                     );
-                    
-                    
+
+
 
                     // TODO: pass input to camera controller
                     if response.has_focus() {
@@ -363,7 +366,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                             receiver: rx.clone(),
                         },
                     ));
-                    
+
                 });
             }
         }
@@ -383,7 +386,6 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 struct Editor {
     viewport: Option<RenderView>,
     tree: egui_tiles::Tree<Pane>,
-    picked_path: Option<String>,
     input_tx: single_value_channel::Updater<Mat4>,
     settings: Arc<Mutex<Settings>>,
 }
@@ -402,7 +404,6 @@ impl Editor {
         Self {
             viewport: RenderView::new(_cc, width, height),
             tree,
-            picked_path: None,
             input_tx,
             settings,
         }
@@ -438,7 +439,9 @@ impl eframe::App for Editor {
                 egui::menu::menu_button(ui, "File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            self.picked_path = Some(path.display().to_string());
+                            if let Ok(mut settings) = self.settings.lock() {
+                                settings.picked_path = Some(path.display().to_string());
+                            }
                         }
                     }
 
@@ -503,6 +506,7 @@ fn main() -> Result<(), eframe::Error> {
     let (render_result_tx, render_result_rx): (Sender<Vec<Color>>, Receiver<Vec<Color>>) =
         crossbeam_channel::bounded(3);
 
+
     let settings: Settings = Settings {
         color: glm::vec3(1.0f32, 1.0f32, 1.0f32),
         g: 0.6,
@@ -510,6 +514,8 @@ fn main() -> Result<(), eframe::Error> {
         scattering: 0.8,
         spp: 1f32,
         progress: 0f32,
+        dist: 200f32,
+        picked_path: None,
     };
     let settings = Arc::new(Mutex::new(settings));
 

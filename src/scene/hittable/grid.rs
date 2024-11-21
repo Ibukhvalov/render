@@ -56,6 +56,7 @@ impl VolumeGrid {
             g: 0.6,
         }
     }
+    
 
     // the Henyey-Greenstein phase function
     fn phase(&self, cos_theta: f32) -> f32 {
@@ -75,7 +76,7 @@ impl VolumeGrid {
         }
 
         if let Some(interval_bbox) = self.bbox.hit(ray, &Interval::ray()) {
-            let step_size = 1f32;
+            let step_size = 5f32;
 
             let t0 = interval_bbox.min;
             let t1 = interval_bbox.max;
@@ -114,8 +115,7 @@ impl VolumeGrid {
         None
     }
 
-    #[allow(dead_code)]
-    fn get_bbox(&self) -> Option<Aabb> {
+    pub fn get_bbox(&self) -> Option<Aabb> {
         Some(self.bbox)
     }
 }
