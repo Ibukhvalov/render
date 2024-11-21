@@ -18,6 +18,7 @@ use std::{
     time::Duration,
 };
 use egui_wgpu::wgpu::util::RenderEncoder;
+use num_traits::real::Real;
 use rayon::prelude::*;
 
 #[repr(C)]
@@ -86,16 +87,20 @@ impl Renderer {
         let camera_matrix = pt_ctx.input_rx.latest();
         //info!("camera matrix: {}", camera_matrix);
 
+        let mut samples_per_pixel = 3;
 
         // copy all settings here
         if let Ok(settings) = pt_ctx.settings.lock() {
-            self.scene.change_background(glamVec3::new(settings.color[0], settings.color[1], settings.color[2]));
+            self.scene.background = glamVec3::new(settings.color[0], settings.color[1], settings.color[2]);
+            self.scene.grid.g = settings.g;
+            self.scene.grid.absorption = settings.absorption;
+            self.scene.grid.scattering = settings.scattering;
+            samples_per_pixel = settings.spp.ceil() as u32;
         } else {
             error!("Could not acquire settings lock, skipping this frame.");
         }
 
 
-        let samples_per_pixel = 3;
         let border = Interval::new(0., 0.9999);
 
 
@@ -107,8 +112,18 @@ impl Renderer {
 
         let image_aspect = width as f32 / height as f32;
         self.camera.update(80., image_aspect);
+        
+        let mut current_progress: f32 = 0.;
+        let progress_step_row: f32 = (height as f32).recip();
 
         for j in 0..height {
+            current_progress += progress_step_row;
+            {
+                if let Ok(mut settings) = pt_ctx.settings.try_lock() {
+                    settings.progress = current_progress;
+                }
+            }
+            
             for i in 0..width {
                 let col_vec3 = (0..samples_per_pixel)
                     .into_par_iter()

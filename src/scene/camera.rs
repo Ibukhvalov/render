@@ -15,6 +15,7 @@ pub struct Camera {
 
     vertical: Vec3,
     horizontal: Vec3,
+    
 }
 
 impl Camera {
@@ -58,7 +59,7 @@ impl Camera {
     // I######
     // v######
     // (v)####
-    pub(crate) fn get_ray(&self, u: f32, v: f32) -> Ray {
+    pub fn get_ray(&self, u: f32, v: f32) -> Ray {
         Ray::new(
             self.look_from,
             self.top_left_corner + u * self.horizontal + v * self.vertical - self.look_from,

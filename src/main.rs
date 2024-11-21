@@ -7,8 +7,8 @@ use std::thread;
 use tracing::debug;
 
 use eframe::egui_wgpu::{self, wgpu};
-use egui::InputState;
-use glm::Mat4;
+use egui::{InputState, Rect};
+use glm::{Mat4, Vec2};
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -259,6 +259,11 @@ impl RenderView {
 struct Settings {
     color: glm::Vec3,
     g: f32,
+    absorption: f32,
+    scattering: f32,
+    spp: f32,
+
+    progress: f32,
 }
 
 #[derive(Debug)]
@@ -308,8 +313,16 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                 // }
                 // Acquire a lock to modify settings
                 if let Ok(mut settings) = settings.lock() {
-                    let color = settings.color.as_mut();
-                    ui.color_edit_button_rgb(color);
+                    ui.color_edit_button_rgb(settings.color.as_mut());
+
+                    ui.add(egui::Slider::new(&mut settings.g, -1.0..=1.0).text("g"));
+                    ui.add(egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"));
+                    ui.add(egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"));
+                    
+                    ui.add(egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"));
+
+                    ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));                    
+                    
                 } else {
                     ui.label("Failed to acquire settings lock.");
                 }
@@ -331,6 +344,8 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                         egui::Vec2::new(width, heigth - 20.0f32),
                         egui::Sense::drag(),
                     );
+                    
+                    
 
                     // TODO: pass input to camera controller
                     if response.has_focus() {
@@ -348,6 +363,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                             receiver: rx.clone(),
                         },
                     ));
+                    
                 });
             }
         }
@@ -444,9 +460,9 @@ impl eframe::App for Editor {
             let mut behavior = TreeBehavior {};
             self.tree.ui(&mut behavior, ui);
         });
-
+        
         // TODO: high cpu usage here we need to repaint only render viewport
-        // ctx.request_repaint();
+        ctx.request_repaint();
     }
 }
 
@@ -489,7 +505,11 @@ fn main() -> Result<(), eframe::Error> {
 
     let settings: Settings = Settings {
         color: glm::vec3(1.0f32, 1.0f32, 1.0f32),
-        g: 0.5,
+        g: 0.6,
+        absorption: 0.13,
+        scattering: 0.8,
+        spp: 1f32,
+        progress: 0f32,
     };
     let settings = Arc::new(Mutex::new(settings));
 

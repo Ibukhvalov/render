@@ -13,9 +13,9 @@ pub struct VolumeGrid {
     shift: Vec3,
     light_dir: Vec3,
     light_col: Vec3,
-    absorption: f32,
-    scattering: f32,
-    g: f32,
+    pub absorption: f32,
+    pub scattering: f32,
+    pub g: f32,
 }
 
 impl VolumeGrid {
