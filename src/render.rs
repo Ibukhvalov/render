@@ -85,7 +85,7 @@ impl Renderer {
 }
 
 impl Renderer {
-    
+
     fn update_settings(&mut self, pt_ctx: &mut PathTracerRenderContext) {
         if let Ok(mut settings) = pt_ctx.settings.lock() {
             if let Some(path) = &settings.picked_path {
@@ -93,12 +93,15 @@ impl Renderer {
                 self.camera.focus_on(self.scene.get_bbox());
                 settings.picked_path = None;
             }
+            self.camera.update_dist(settings.dist);
+            
             self.scene.background = glamVec3::new(settings.color[0], settings.color[1], settings.color[2]);
             self.scene.grid.g = settings.g;
             self.scene.grid.absorption = settings.absorption;
             self.scene.grid.scattering = settings.scattering;
+            self.scene.grid.step_size = settings.ray_marching_step;
+            
             self.samples_per_pixel = settings.spp.ceil() as u32;
-            self.camera.update_dist(settings.dist);
         } else {
             error!("Could not acquire settings lock, skipping this frame.");
         }
@@ -109,7 +112,7 @@ impl Renderer {
         self.update_settings(pt_ctx);
         let border = Interval::new(0., 0.9999);
         let (width, height) = (pt_ctx.result_width, pt_ctx.result_height);
-        
+
         
         let mut current_progress: f32 = 0.;
         let progress_step_row: f32 = (height as f32).recip();

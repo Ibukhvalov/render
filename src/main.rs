@@ -264,6 +264,7 @@ struct Settings {
     spp: f32,
     progress: f32,
     dist: f32,
+    ray_marching_step: f32,
     picked_path: Option<String>,
 }
 
@@ -315,17 +316,13 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                 // Acquire a lock to modify settings
                 if let Ok(mut settings) = settings.lock() {
                     ui.color_edit_button_rgb(settings.color.as_mut());
-
                     ui.add(egui::Slider::new(&mut settings.g, -1.0..=1.0).text("g"));
                     ui.add(egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"));
                     ui.add(egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"));
-                    
                     ui.add(egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"));
-
+                    ui.add(egui::Slider::new(&mut settings.ray_marching_step, 1.0..=10.0).text("ray marching step"));
                     ui.add(egui::Slider::new(&mut settings.dist, 1.0..=1000.0).text("dist from target center"));
-
-                    ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));                    
-                    
+                    ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));
                 } else {
                     ui.label("Failed to acquire settings lock.");
                 }
@@ -512,6 +509,7 @@ fn main() -> Result<(), eframe::Error> {
         g: 0.6,
         absorption: 0.13,
         scattering: 0.8,
+        ray_marching_step: 1f32,
         spp: 1f32,
         progress: 0f32,
         dist: 200f32,

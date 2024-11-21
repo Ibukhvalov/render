@@ -16,6 +16,7 @@ pub struct VolumeGrid {
     pub absorption: f32,
     pub scattering: f32,
     pub g: f32,
+    pub step_size: f32,
 }
 
 impl VolumeGrid {
@@ -54,6 +55,7 @@ impl VolumeGrid {
             absorption: 0.13,
             scattering: 0.8,
             g: 0.6,
+            step_size: 1f32,
         }
     }
     
@@ -76,25 +78,24 @@ impl VolumeGrid {
         }
 
         if let Some(interval_bbox) = self.bbox.hit(ray, &Interval::ray()) {
-            let step_size = 5f32;
 
             let t0 = interval_bbox.min;
             let t1 = interval_bbox.max;
 
             let mut transparency = 1f32;
             let mut result = Vec3::ZERO;
-            let ns = ((t1 - t0) / step_size).round() as u32;
+            let ns = ((t1 - t0) / self.step_size).round() as u32;
 
             for n in 0..ns {
                 if transparency <= 0.001 {
                     break;
                 }
-                let t = t1.min(t0 + step_size * (n as f32 + 0.5));
+                let t = t1.min(t0 + self.step_size * (n as f32 + 0.5));
                 let sample_pos = ray.at(t);
                 //if (sample_pos).length_squared() <= 100f32 {
                 if let Some(sample_density) = self.get_weight(sample_pos) {
                     //let sample_density = 0.1f32;
-                    let sample_transparency = (-step_size * sample_density * (self.scattering * self.absorption)).exp();
+                    let sample_transparency = (-self.step_size * sample_density * (self.scattering * self.absorption)).exp();
                     transparency *= sample_transparency;
 
                     if let Some(rec) =
@@ -102,7 +103,7 @@ impl VolumeGrid {
                     {
                         let light_attenuation = rec.transparency;
                         let cos_theta = cos_between(&ray.direction, &self.light_dir);
-                        result += transparency * self.light_col * light_attenuation * step_size * sample_density * self.phase(cos_theta) * self.scattering;
+                        result += transparency * self.light_col * light_attenuation * self.step_size * sample_density * self.phase(cos_theta) * self.scattering;
                     }
                 }
             }
