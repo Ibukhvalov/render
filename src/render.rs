@@ -75,16 +75,13 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new() -> Self {
-        let camera = Camera::new(glamVec3::new(0.,0.,100.), glamVec3::ZERO, glamVec3::Y, 80., 1.0);
+        let camera = Camera::new(glamVec3::new(0.,0.,1000.), glamVec3::ZERO, glamVec3::Y, 80., 1.0);
         Self {
             samples_per_pixel: 3,
             camera,
             scene: Scene::new(glamVec3::new(0.6,0.6,0.9)),
         }
     }
-}
-
-impl Renderer {
 
     fn update_settings(&mut self, pt_ctx: &mut PathTracerRenderContext) {
         if let Ok(mut settings) = pt_ctx.settings.lock() {

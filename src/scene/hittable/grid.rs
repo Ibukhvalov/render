@@ -55,7 +55,7 @@ impl VolumeGrid {
             absorption: 0.13,
             scattering: 0.8,
             g: 0.6,
-            step_size: 1f32,
+            step_size: 10f32,
         }
     }
     
