@@ -1,26 +1,23 @@
 //#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::collections::HashSet;
-use std::f32::consts::PI;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-
 
 use eframe::egui_wgpu::{self, wgpu};
 use egui::{InputState, Key, Rect};
 use glam::{BVec3A, Mat4, Quat, Vec3, Vec4};
 
+use crate::render::Renderer;
 use crossbeam_channel::{Receiver, Sender};
 use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp};
 use render::Color;
 use render::PathTracerRenderContext;
-use crate::render::Renderer;
 
+mod interval;
 mod render;
 mod scene;
-mod interval;
 mod util;
-
 
 struct RenderView {}
 
@@ -117,8 +114,7 @@ impl RenderView {
             depth_or_array_layers: 1,
         };
 
-        let staging_buffer_size: usize =
-            (width * height) as usize * std::mem::size_of::<Vec4>();
+        let staging_buffer_size: usize = (width * height) as usize * std::mem::size_of::<Vec4>();
 
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Staging Buffer"),
@@ -307,7 +303,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
     ) -> egui_tiles::UiResponse {
         match &pane.kind {
             PaneType::Settings(settings) => {
-                ui.label(format!("Settings."));
+                ui.label("Settings.".to_string());
                 // let color = settings.as_mut_slice();
                 // if let Some(color_array) = color.get_mut(0..3) {
                 //     ui.color_edit_button_rgb(color_array.try_into().unwrap());
@@ -319,10 +315,19 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     ui.color_edit_button_rgb(settings.light_color.as_mut());
                     ui.label("light color");
                     ui.add(egui::Slider::new(&mut settings.g, -1.0..=1.0).text("g"));
-                    ui.add(egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"));
-                    ui.add(egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"));
-                    ui.add(egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"));
-                    ui.add(egui::Slider::new(&mut settings.ray_marching_step, 0.5..=10.0).text("ray marching step"));
+                    ui.add(
+                        egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut settings.ray_marching_step, 1.0..=10.0)
+                            .text("ray marching step"),
+                    );
                     ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));
                 } else {
                     ui.label("Failed to acquire settings lock.");
@@ -346,12 +351,8 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                         egui::Sense::drag(),
                     );
 
-
-
                     // TODO: pass input to camera controller
-                    if response.has_focus() {
-                    }
-
+                    if response.has_focus() {}
 
                     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                         rect,
@@ -359,7 +360,6 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                             receiver: rx.clone(),
                         },
                     ));
-
                 });
             }
         }
@@ -388,12 +388,15 @@ struct View {
     rotation_x: Quat,
     rotation_y: Quat,
     translation: Vec3,
-    scale: Vec3,
 }
 
 impl View {
     pub fn default() -> Self {
-        Self{rotation_x: Quat::IDENTITY, rotation_y: Quat::IDENTITY, translation: Vec3::NEG_Z * 120f32, scale: Vec3::ONE}
+        Self {
+            rotation_x: Quat::IDENTITY,
+            rotation_y: Quat::IDENTITY,
+            translation: Vec3::NEG_Z * 120f32,
+        }
     }
 }
 
@@ -425,7 +428,6 @@ impl Editor {
         let view_dir = (rotation * Vec3::Z).normalize();
         let right_dir = (rotation * Vec3::X).normalize();
         let up_dir = (Vec3::Y).normalize();
-        
 
         if keys.contains(&Key::W) {
             self.camera_to_world.translation += view_dir;
@@ -458,18 +460,23 @@ impl Editor {
         if keys.contains(&ArrowLeft) {
             self.camera_to_world.rotation_y *= Quat::from_rotation_y(-0.01f32);
         }
-        
+
         self.send_camera_matrix();
     }
 
     fn handle_mouse(&mut self, pointer: egui::PointerState) {
-        //self.camera_to_world.rotation *= Quat::from_rotation_y(pointer.delta().x * 0.01);
-        //self.camera_to_world.rotation *= Quat::from_rotation_x(pointer.delta().y * 0.01);
+        //self.camera_to_world.rotation_x *= Quat::from_rotation_y(pointer.delta().x * 0.002);
+        //self.camera_to_world.rotation_y *= Quat::from_rotation_x(pointer.delta().y * 0.002);
     }
 
     fn send_camera_matrix(&self) {
         let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
-        self.input_tx.update(Mat4::from_rotation_translation(rotation, self.camera_to_world.translation)).expect("Cant send matrix");
+        self.input_tx
+            .update(Mat4::from_rotation_translation(
+                rotation,
+                self.camera_to_world.translation,
+            ))
+            .expect("Cant send matrix");
     }
 }
 
@@ -488,7 +495,6 @@ impl eframe::App for Editor {
         let input = ctx.input(|i| i.clone());
         self.handle_key_down(input.keys_down);
         self.handle_mouse(input.pointer);
-
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -520,7 +526,7 @@ impl eframe::App for Editor {
             let mut behavior = TreeBehavior {};
             self.tree.ui(&mut behavior, ui);
         });
-        
+
         // TODO: high cpu usage here we need to repaint only render viewport
         ctx.request_repaint();
     }
@@ -562,7 +568,6 @@ fn main() -> Result<(), eframe::Error> {
         single_value_channel::channel_starting_with(Mat4::IDENTITY);
     let (render_result_tx, render_result_rx): (Sender<Vec<Color>>, Receiver<Vec<Color>>) =
         crossbeam_channel::bounded(3);
-
 
     let settings: Settings = Settings {
         background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),

@@ -1,9 +1,9 @@
-use crate::scene::hittable::{Aabb, HitRecord};
 use crate::interval::Interval;
+use crate::scene::hittable::{Aabb, HitRecord};
 use crate::scene::ray::Ray;
+use crate::util::cos_between;
 use glam::Vec3;
 use half::f16;
-use crate::util::cos_between;
 use std::f32::consts::PI;
 use vdb_rs::Grid;
 
@@ -58,7 +58,6 @@ impl VolumeGrid {
             step_size: 10f32,
         }
     }
-    
 
     // the Henyey-Greenstein phase function
     fn phase(&self, cos_theta: f32) -> f32 {
@@ -78,7 +77,6 @@ impl VolumeGrid {
         }
 
         if let Some(interval_bbox) = self.bbox.hit(ray, &Interval::ray()) {
-
             let t0 = interval_bbox.min;
             let t1 = interval_bbox.max;
 
@@ -95,7 +93,9 @@ impl VolumeGrid {
                 //if (sample_pos).length_squared() <= 100f32 {
                 if let Some(sample_density) = self.get_weight(sample_pos) {
                     //let sample_density = 0.1f32;
-                    let sample_transparency = (-self.step_size * sample_density * (self.scattering * self.absorption)).exp();
+                    let sample_transparency =
+                        (-self.step_size * sample_density * (self.scattering * self.absorption))
+                            .exp();
                     transparency *= sample_transparency;
 
                     if let Some(rec) =
@@ -103,7 +103,13 @@ impl VolumeGrid {
                     {
                         let light_attenuation = rec.transparency;
                         let cos_theta = cos_between(&ray.direction, &self.light_dir);
-                        result += transparency * self.light_col * light_attenuation * self.step_size * sample_density * self.phase(cos_theta) * self.scattering;
+                        result += transparency
+                            * self.light_col
+                            * light_attenuation
+                            * self.step_size
+                            * sample_density
+                            * self.phase(cos_theta)
+                            * self.scattering;
                     }
                 }
             }

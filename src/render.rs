@@ -1,21 +1,21 @@
 use crossbeam_channel::Sender;
 
-use super::scene::Scene;
 use super::scene::camera::Camera;
+use super::scene::Scene;
 use crate::interval::Interval;
 use crate::util::*;
 
 use crate::Settings;
+use egui_wgpu::wgpu::util::RenderEncoder;
 use glam::{Mat4, Vec3, Vec4};
 use log::{debug, info};
+use num_traits::real::Real;
+use rayon::prelude::*;
 use std::{
     sync::{Arc, Mutex},
     thread::sleep,
     time::Duration,
 };
-use egui_wgpu::wgpu::util::RenderEncoder;
-use num_traits::real::Real;
-use rayon::prelude::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,7 +58,6 @@ impl PathTracerRenderContext {
     }
 }
 
-
 pub struct Renderer {
     camera: Camera,
     scene: Scene,
@@ -67,11 +66,11 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new() -> Self {
-        let camera = Camera::new(Vec3::new(0.,0.,1000.), Vec3::ZERO, Vec3::Y, 80., 1.0);
+        let camera = Camera::new(Vec3::new(0., 0., 1000.), Vec3::ZERO, Vec3::Y, 80., 1.0);
         Self {
             samples_per_pixel: 3,
             camera,
-            scene: Scene::new(Vec3::new(0.6,0.6,0.9)),
+            scene: Scene::new(Vec3::new(0.6, 0.6, 0.9)),
         }
     }
 
@@ -85,7 +84,7 @@ impl Renderer {
             self.scene.grid.g = settings.g;
             self.scene.grid.absorption = settings.absorption;
             self.scene.grid.scattering = settings.scattering;
-            self.scene.grid.step_size = settings.ray_marching_step;            
+            self.scene.grid.step_size = settings.ray_marching_step;
             self.samples_per_pixel = settings.spp.ceil() as u32;
         } else {
             panic!("Could not acquire settings lock, skipping this frame.");
@@ -98,7 +97,6 @@ impl Renderer {
         let border = Interval::new(0., 0.9999);
         let (width, height) = (pt_ctx.result_width, pt_ctx.result_height);
 
-        
         let mut current_progress: f32 = 0.;
         let progress_step_row: f32 = (height as f32).recip();
 
@@ -108,9 +106,9 @@ impl Renderer {
                 if let Ok(mut settings) = pt_ctx.settings.try_lock() {
                     settings.progress = current_progress;
                 }
-            }                
-            
-            for i in 0..width {               
+            }
+
+            for i in 0..width {
                 let col_vec3 = (0..self.samples_per_pixel)
                     .into_par_iter()
                     .map(|_s| {
@@ -123,11 +121,16 @@ impl Renderer {
                     })
                     .reduce(|| Vec3::ZERO, |accum, color| accum + color)
                     * (self.samples_per_pixel as f32).recip();
-                
-                let col = Color::new(border.clamp(col_vec3.x), border.clamp(col_vec3.y), border.clamp(col_vec3.z), 1f32);
+
+                let col = Color::new(
+                    border.clamp(col_vec3.x),
+                    border.clamp(col_vec3.y),
+                    border.clamp(col_vec3.z),
+                    1f32,
+                );
 
                 image_data[(j * pt_ctx.result_width + i) as usize] = col;
-            };
+            }
         }
         match pt_ctx.tx.try_send(image_data) {
             Ok(_) => {
@@ -138,8 +141,5 @@ impl Renderer {
                 sleep(Duration::from_millis(16));
             }
         }
-
-
     }
-
 }
