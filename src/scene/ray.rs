@@ -23,7 +23,7 @@ impl Ray {
         if let Some(rec) = grid.get_color(self, 2) {
             return background_color * rec.transparency + rec.resulted_color;
         }
-
+        
         *background_color
     }
 }

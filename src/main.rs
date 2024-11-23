@@ -1,17 +1,17 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+//#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-extern crate nalgebra_glm as glm;
-
+use std::collections::HashSet;
+use std::f32::consts::PI;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-use tracing::debug;
+
 
 use eframe::egui_wgpu::{self, wgpu};
-use egui::{InputState, Rect};
-use glm::{Mat4, Vec2};
+use egui::{InputState, Key, Rect};
+use glam::{BVec3A, Mat4, Quat, Vec3, Vec4};
 
 use crossbeam_channel::{Receiver, Sender};
-
+use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp};
 use render::Color;
 use render::PathTracerRenderContext;
 use crate::render::Renderer;
@@ -20,6 +20,7 @@ mod render;
 mod scene;
 mod interval;
 mod util;
+
 
 struct RenderView {}
 
@@ -41,7 +42,6 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
         let resources: &FullScreenTriangleRenderResources = resources.get().unwrap();
 
         if let Ok(image) = self.receiver.try_recv() {
-            debug!("received frame");
             queue.write_buffer(
                 &resources.staging_buffer,
                 0,
@@ -53,7 +53,7 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
                     buffer: &resources.staging_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: Some((tex_width * std::mem::size_of::<glm::Vec4>()) as u32),
+                        bytes_per_row: Some((tex_width * size_of::<glam::Vec4>()) as u32),
                         rows_per_image: None,
                     },
                 },
@@ -96,7 +96,6 @@ impl FullScreenTriangleRenderResources {
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         // Draw our triangle!
-        debug!("PRESENT!");
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.draw(0..3, 0..1);
@@ -119,7 +118,7 @@ impl RenderView {
         };
 
         let staging_buffer_size: usize =
-            (width * height) as usize * std::mem::size_of::<glm::Vec4>();
+            (width * height) as usize * std::mem::size_of::<Vec4>();
 
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Staging Buffer"),
@@ -257,13 +256,13 @@ impl RenderView {
 
 #[derive(Debug)]
 struct Settings {
-    color: glm::Vec3,
+    background_color: Vec3,
+    light_color: Vec3,
     g: f32,
     absorption: f32,
     scattering: f32,
     spp: f32,
     progress: f32,
-    dist: f32,
     ray_marching_step: f32,
     picked_path: Option<String>,
 }
@@ -315,13 +314,15 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                 // }
                 // Acquire a lock to modify settings
                 if let Ok(mut settings) = settings.lock() {
-                    ui.color_edit_button_rgb(settings.color.as_mut());
+                    ui.color_edit_button_rgb(settings.background_color.as_mut());
+                    ui.label("background color");
+                    ui.color_edit_button_rgb(settings.light_color.as_mut());
+                    ui.label("light color");
                     ui.add(egui::Slider::new(&mut settings.g, -1.0..=1.0).text("g"));
                     ui.add(egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"));
                     ui.add(egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"));
                     ui.add(egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"));
-                    ui.add(egui::Slider::new(&mut settings.ray_marching_step, 1.0..=10.0).text("ray marching step"));
-                    ui.add(egui::Slider::new(&mut settings.dist, 1.0..=1000.0).text("dist from target center"));
+                    ui.add(egui::Slider::new(&mut settings.ray_marching_step, 0.5..=10.0).text("ray marching step"));
                     ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));
                 } else {
                     ui.label("Failed to acquire settings lock.");
@@ -349,13 +350,8 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 
                     // TODO: pass input to camera controller
                     if response.has_focus() {
-                        debug!("FOCUS!!!");
                     }
 
-                    if ui.ctx().input(|i| i.key_pressed(egui::Key::A)) {
-                        debug!("\nPressed");
-                    }
-                    debug!("update!");
 
                     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                         rect,
@@ -385,6 +381,20 @@ struct Editor {
     tree: egui_tiles::Tree<Pane>,
     input_tx: single_value_channel::Updater<Mat4>,
     settings: Arc<Mutex<Settings>>,
+    camera_to_world: View,
+}
+
+struct View {
+    rotation_x: Quat,
+    rotation_y: Quat,
+    translation: Vec3,
+    scale: Vec3,
+}
+
+impl View {
+    pub fn default() -> Self {
+        Self{rotation_x: Quat::IDENTITY, rotation_y: Quat::IDENTITY, translation: Vec3::NEG_Z * 120f32, scale: Vec3::ONE}
+    }
 }
 
 impl Editor {
@@ -403,7 +413,63 @@ impl Editor {
             tree,
             input_tx,
             settings,
+            camera_to_world: View::default(),
         }
+    }
+}
+
+impl Editor {
+    fn handle_key_down(&mut self, keys: HashSet<Key>) {
+        let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
+
+        let view_dir = (rotation * Vec3::Z).normalize();
+        let right_dir = (rotation * Vec3::X).normalize();
+        let up_dir = (Vec3::Y).normalize();
+        
+
+        if keys.contains(&Key::W) {
+            self.camera_to_world.translation += view_dir;
+        }
+        if keys.contains(&Key::S) {
+            self.camera_to_world.translation -= view_dir;
+        }
+        if keys.contains(&Key::A) {
+            self.camera_to_world.translation -= right_dir;
+        }
+        if keys.contains(&Key::D) {
+            self.camera_to_world.translation += right_dir;
+        }
+        if keys.contains(&Key::Q) {
+            self.camera_to_world.translation -= up_dir;
+        }
+        if keys.contains(&Key::E) {
+            self.camera_to_world.translation += up_dir;
+        }
+
+        if keys.contains(&ArrowDown) {
+            self.camera_to_world.rotation_x *= Quat::from_rotation_x(0.01f32);
+        }
+        if keys.contains(&ArrowUp) {
+            self.camera_to_world.rotation_x *= Quat::from_rotation_x(-0.01f32);
+        }
+        if keys.contains(&ArrowRight) {
+            self.camera_to_world.rotation_y *= Quat::from_rotation_y(0.01f32);
+        }
+        if keys.contains(&ArrowLeft) {
+            self.camera_to_world.rotation_y *= Quat::from_rotation_y(-0.01f32);
+        }
+        
+        self.send_camera_matrix();
+    }
+
+    fn handle_mouse(&mut self, pointer: egui::PointerState) {
+        //self.camera_to_world.rotation *= Quat::from_rotation_y(pointer.delta().x * 0.01);
+        //self.camera_to_world.rotation *= Quat::from_rotation_x(pointer.delta().y * 0.01);
+    }
+
+    fn send_camera_matrix(&self) {
+        let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
+        self.input_tx.update(Mat4::from_rotation_translation(rotation, self.camera_to_world.translation)).expect("Cant send matrix");
     }
 }
 
@@ -419,16 +485,10 @@ impl eframe::App for Editor {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
-            let fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
-            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
-        }
+        let input = ctx.input(|i| i.clone());
+        self.handle_key_down(input.keys_down);
+        self.handle_mouse(input.pointer);
 
-        if ctx.input_mut(|i: &mut InputState| i.consume_key(egui::Modifiers::NONE, egui::Key::W)) {
-            // TODO: pass input to render thread
-            let new_matrix = glm::perspective(1.0f32, 45.0f32, 0.1f32, 1000.0f32);
-            let _ = self.input_tx.update(new_matrix);
-        }
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -499,20 +559,20 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     let (matrix_receiver, matrix_updater) =
-        single_value_channel::channel_starting_with(Mat4::identity());
+        single_value_channel::channel_starting_with(Mat4::IDENTITY);
     let (render_result_tx, render_result_rx): (Sender<Vec<Color>>, Receiver<Vec<Color>>) =
         crossbeam_channel::bounded(3);
 
 
     let settings: Settings = Settings {
-        color: glm::vec3(1.0f32, 1.0f32, 1.0f32),
+        background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
+        light_color: Vec3::new(1.0, 0.9, 0.9),
         g: 0.6,
         absorption: 0.13,
         scattering: 0.8,
-        ray_marching_step: 1f32,
+        ray_marching_step: 10f32,
         spp: 1f32,
         progress: 0f32,
-        dist: 200f32,
         picked_path: None,
     };
     let settings = Arc::new(Mutex::new(settings));
