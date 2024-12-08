@@ -6,9 +6,8 @@ use crate::interval::Interval;
 use crate::util::*;
 
 use crate::Settings;
-use egui_wgpu::wgpu::util::RenderEncoder;
-use glam::{Mat4, Vec3, Vec4};
-use log::{debug, info};
+use glam::{Mat4, Vec3};
+use log::debug;
 use num_traits::real::Real;
 use rayon::prelude::*;
 use std::{
@@ -75,9 +74,10 @@ impl Renderer {
     }
 
     fn update_settings(&mut self, pt_ctx: &mut PathTracerRenderContext) {
-        if let Ok(settings) = pt_ctx.settings.lock() {
+        if let Ok(mut settings) = pt_ctx.settings.lock() {
             if let Some(path) = &settings.picked_path {
                 self.scene.update_scene(path);
+                settings.picked_path = None;
             }
             self.scene.background = settings.background_color;
             self.scene.grid.light_col = settings.light_color * 1.3f32;
@@ -89,7 +89,7 @@ impl Renderer {
         } else {
             panic!("Could not acquire settings lock, skipping this frame.");
         }
-        self.camera.camera_to_world = pt_ctx.input_rx.latest().clone();
+        self.camera.camera_to_world = *pt_ctx.input_rx.latest();
     }
     pub fn run_iteration(&mut self, pt_ctx: &mut PathTracerRenderContext) {
         let mut image_data = pt_ctx.image_data.lock().unwrap().clone();

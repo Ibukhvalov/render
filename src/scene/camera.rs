@@ -1,5 +1,4 @@
 use super::ray::Ray;
-use crate::scene::hittable::aabb::Aabb;
 use glam::{Mat4, Vec3};
 
 pub struct Camera {

@@ -1,9 +1,7 @@
-use crate::scene::camera::Camera;
 use crate::scene::hittable::aabb::Aabb;
 use crate::scene::hittable::grid::VolumeGrid;
 use crate::scene::ray::Ray;
 use glam::Vec3;
-use rayon::iter::IntoParallelIterator;
 use std::fs::File;
 use std::io::BufReader;
 use vdb_rs::VdbReader;

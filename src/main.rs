@@ -5,12 +5,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 use eframe::egui_wgpu::{self, wgpu};
-use egui::{InputState, Key, Rect};
-use glam::{BVec3A, Mat4, Quat, Vec3, Vec4};
+use egui::Key;
+use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::render::Renderer;
 use crossbeam_channel::{Receiver, Sender};
-use egui::Key::{ArrowDown, ArrowLeft, ArrowRight, ArrowUp};
 use render::Color;
 use render::PathTracerRenderContext;
 
@@ -352,7 +351,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     );
 
                     // TODO: pass input to camera controller
-                    if response.has_focus() {}
+                    response.has_focus();
 
                     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                         rect,
@@ -428,41 +427,38 @@ impl Editor {
         let view_dir = (rotation * Vec3::Z).normalize();
         let right_dir = (rotation * Vec3::X).normalize();
         let up_dir = (Vec3::Y).normalize();
+        
+        for key in keys {
+            self.camera_to_world.translation += match key {
+                Key::W => view_dir,
+                Key::S => -view_dir,
+                Key::A => -right_dir,
+                Key::D => right_dir,
+                Key::Q => -up_dir,
+                Key::E => up_dir,
+                _ => Vec3::ZERO,
+            };
+            
+            self.camera_to_world.rotation_x *= match key {
+                Key::ArrowUp => Quat::from_rotation_x(-0.01f32),
+                Key::ArrowDown => Quat::from_rotation_x(0.01f32),
+                _ => Quat::IDENTITY,
+            };
 
-        if keys.contains(&Key::W) {
-            self.camera_to_world.translation += view_dir;
-        }
-        if keys.contains(&Key::S) {
-            self.camera_to_world.translation -= view_dir;
-        }
-        if keys.contains(&Key::A) {
-            self.camera_to_world.translation -= right_dir;
-        }
-        if keys.contains(&Key::D) {
-            self.camera_to_world.translation += right_dir;
-        }
-        if keys.contains(&Key::Q) {
-            self.camera_to_world.translation -= up_dir;
-        }
-        if keys.contains(&Key::E) {
-            self.camera_to_world.translation += up_dir;
-        }
-
-        if keys.contains(&ArrowDown) {
-            self.camera_to_world.rotation_x *= Quat::from_rotation_x(0.01f32);
-        }
-        if keys.contains(&ArrowUp) {
-            self.camera_to_world.rotation_x *= Quat::from_rotation_x(-0.01f32);
-        }
-        if keys.contains(&ArrowRight) {
-            self.camera_to_world.rotation_y *= Quat::from_rotation_y(0.01f32);
-        }
-        if keys.contains(&ArrowLeft) {
-            self.camera_to_world.rotation_y *= Quat::from_rotation_y(-0.01f32);
-        }
-
+            self.camera_to_world.rotation_y *= match key {
+                Key::ArrowRight => Quat::from_rotation_y(0.01f32),
+                Key::ArrowLeft => Quat::from_rotation_y(-0.01f32),
+                _ => Quat::IDENTITY,
+            };
+                
+            }
+        
         self.send_camera_matrix();
+        
     }
+ 
+
+    
 
     fn handle_mouse(&mut self, pointer: egui::PointerState) {
         //self.camera_to_world.rotation_x *= Quat::from_rotation_y(pointer.delta().x * 0.002);
@@ -481,16 +477,6 @@ impl Editor {
 }
 
 impl eframe::App for Editor {
-    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        // Give the area behind the floating windows a different color, because it looks better:
-        let color = egui::lerp(
-            egui::Rgba::from(visuals.panel_fill)..=egui::Rgba::from(visuals.extreme_bg_color),
-            0.5,
-        );
-        let color = egui::Color32::from(color);
-        color.to_normalized_gamma_f32()
-    }
-
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let input = ctx.input(|i| i.clone());
         self.handle_key_down(input.keys_down);
@@ -529,6 +515,16 @@ impl eframe::App for Editor {
 
         // TODO: high cpu usage here we need to repaint only render viewport
         ctx.request_repaint();
+    }
+
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        // Give the area behind the floating windows a different color, because it looks better:
+        let color = egui::lerp(
+            egui::Rgba::from(visuals.panel_fill)..=egui::Rgba::from(visuals.extreme_bg_color),
+            0.5,
+        );
+        let color = egui::Color32::from(color);
+        color.to_normalized_gamma_f32()
     }
 }
 

@@ -7,9 +7,12 @@ use half::f16;
 use std::f32::consts::PI;
 use vdb_rs::Grid;
 
+type Weight = f32;
+
 pub struct VolumeGrid {
     bbox: Aabb,
-    weights: Vec<Vec<Vec<Option<f32>>>>,
+    weights: Vec<Vec<Vec<Option<Weight>>>>,
+    resolution: [f32; 3],
     shift: Vec3,
     pub light_dir: Vec3,
     pub light_col: Vec3,
@@ -31,6 +34,8 @@ impl VolumeGrid {
             Vec3::new(max_i.x as f32, max_i.y as f32, max_i.z as f32),
         );
         let length = max_i - min_i;
+        let resolution = [length[0] as f32, length[1] as f32, length[2] as f32];
+
         let shift = -Vec3::new(min_i.x as f32, min_i.y as f32, min_i.z as f32);
 
         let mut weights =
@@ -47,6 +52,7 @@ impl VolumeGrid {
         }
 
         Self {
+            resolution,
             bbox,
             weights,
             shift,
@@ -66,9 +72,43 @@ impl VolumeGrid {
         1f32 / (4f32 * PI) * (1f32 - g * g) / (denom * denom.sqrt())
     }
     fn get_weight(&self, pos: Vec3) -> Option<f32> {
-        let indexes = pos + self.shift;
-        self.weights[indexes.x.floor() as usize][indexes.y.floor() as usize]
-            [indexes.z.floor() as usize]
+        let indexes = (pos.round());
+        if(indexes.x < 0f32 || indexes.x > self.resolution[0] ||
+            indexes.y < 0f32 || indexes.y > self.resolution[1] ||
+            indexes.z < 0f32 || indexes.z > self.resolution[2])
+        {None}
+        else {
+            self.weights[indexes.x as usize][indexes.y as usize][indexes.z as usize]
+        }
+    }
+    
+    fn get_interpolated_weight(&self, pos: Vec3) -> Option<f32> {
+        let p_local = pos - self.bbox.min;
+        let p_lattice = p_local - 0.5f32;
+
+        let p_rounded = p_lattice.floor();
+        
+        let mut weight = [0f32; 3];
+        let mut result = 0f32;
+        
+        for i in 0..2 {
+            weight[0] = 1f32 - (p_lattice.x - (p_rounded.x + i as f32)).abs();
+            for j in 0..2 {
+                weight[1] = 1f32 - (p_lattice.y - (p_rounded.y + j as f32)).abs();
+                for k in 0..2 {
+                    weight[2] = 1f32 - (p_lattice.z - (p_rounded.z + k as f32)).abs();
+                    let prob_weight = self.get_weight(Vec3::new(i as f32,j as f32,k as f32) + p_rounded);
+                    if let Some(prob_weight) = prob_weight {
+                        result += weight[0] * weight[1] * weight[2] * prob_weight;
+                    }
+                }
+            }
+        }
+        if result > 0e-3 {
+            Some(result)
+        } else {
+            None
+        }
     }
 
     pub fn get_color(&self, ray: &Ray, depth: u32) -> Option<HitRecord> {
@@ -91,7 +131,7 @@ impl VolumeGrid {
                 let t = t1.min(t0 + self.step_size * (n as f32 + 0.5));
                 let sample_pos = ray.at(t);
                 //if (sample_pos).length_squared() <= 100f32 {
-                if let Some(sample_density) = self.get_weight(sample_pos) {
+                if let Some(sample_density) = self.get_interpolated_weight(sample_pos) {
                     //let sample_density = 0.1f32;
                     let sample_transparency =
                         (-self.step_size * sample_density * (self.scattering * self.absorption))
