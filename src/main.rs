@@ -2,60 +2,39 @@
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
 
 use eframe::egui_wgpu::{self, wgpu};
+use eframe::wgpu::util::DeviceExt;
+use eframe::wgpu::{include_wgsl, BufferUsages, ComputePassDescriptor};
 use egui::Key;
 use glam::{Mat4, Quat, Vec3, Vec4};
 
-use crate::render::Renderer;
 use crossbeam_channel::{Receiver, Sender};
-use render::Color;
-use render::PathTracerRenderContext;
-
-mod interval;
-mod render;
-mod scene;
-mod util;
 
 struct RenderView {}
 
 #[derive(Clone)]
-struct RenderViewCallback {
-    // TODO: rework with arc mutex?
-    receiver: Arc<Receiver<Vec<Color>>>,
-}
+struct RenderViewCallback {}
 
 impl egui_wgpu::CallbackTrait for RenderViewCallback {
     fn prepare(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        screen_descriptor: &egui_wgpu::ScreenDescriptor,
         egui_encoder: &mut wgpu::CommandEncoder,
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &FullScreenTriangleRenderResources = resources.get().unwrap();
-
-        if let Ok(image) = self.receiver.try_recv() {
-            queue.write_buffer(
-                &resources.staging_buffer,
-                0,
-                bytemuck::cast_slice(image.as_slice()),
-            );
-            let tex_width = resources.result_texture.size().width as usize;
-            egui_encoder.copy_buffer_to_texture(
-                wgpu::ImageCopyBuffer {
-                    buffer: &resources.staging_buffer,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some((tex_width * size_of::<glam::Vec4>()) as u32),
-                        rows_per_image: None,
-                    },
-                },
-                resources.result_texture.as_image_copy(),
-                resources.result_texture.size(),
-            );
+        {
+            let mut compute_pass = egui_encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Compute"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&resources.compute_pipeline);
+            compute_pass.set_bind_group(0, &resources.compute_bind_group, &[]);
+            let size = screen_descriptor.size_in_pixels;
+            compute_pass.dispatch_workgroups(size[0], size[1], 1);
         }
 
         resources.prepare(device, queue); // TODO: pass screen dims here
@@ -74,14 +53,22 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
 }
 
 struct FullScreenTriangleRenderResources {
-    pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    staging_buffer: wgpu::Buffer,
-    result_texture: wgpu::Texture,
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_bind_group: wgpu::BindGroup,
+    compute_pipeline: wgpu::ComputePipeline,
+    compute_bind_group: wgpu::BindGroup,
+
+    settings: Arc<Mutex<Settings>>,
+    color_buffer: wgpu::Buffer,
 }
 
 impl FullScreenTriangleRenderResources {
-    fn prepare(&self, _device: &wgpu::Device, _queue: &wgpu::Queue) {
+    fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+        if let Ok(settings) = self.settings.lock() {
+            let color = settings.background_color;
+            queue.write_buffer(&self.color_buffer, 0, bytemuck::cast_slice(&[color[0], color[1], color[2], 1f32]));
+        }
+        //let color = [255u8, 0u8, 0u8, 0u8];
         // Update our uniform buffer with the angle from the UI
         // queue.write_buffer(
         //     &self.uniform_buffer,
@@ -92,20 +79,26 @@ impl FullScreenTriangleRenderResources {
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         // Draw our triangle!
-        render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.draw(0..3, 0..1);
+            render_pass.set_pipeline(&self.blit_pipeline);
+            render_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
     }
 }
 
 impl RenderView {
     // TODO: setup wgpu pipeline for presenting full screen triangle with texture
-    pub fn new<'a>(cc: &'a eframe::CreationContext<'a>, width: u32, height: u32) -> Option<Self> {
+    pub fn new<'a>(cc: &'a eframe::CreationContext<'a>, width: u32, height: u32, settings: Arc<Mutex<Settings>>) -> Option<Self> {
         // Get the WGPU render state from the eframe creation context. This can also be retrieved
         // from `eframe::Frame` when you don't have a `CreationContext` available.
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
 
+
         let device = &wgpu_render_state.device;
+
+
+        let blit_module = device.create_shader_module(include_wgsl!("blit.wgsl"));
+        let cs_module = device.create_shader_module(include_wgsl!("compute.wgsl"));
+
 
         let texture_size = wgpu::Extent3d {
             width,
@@ -113,6 +106,41 @@ impl RenderView {
             depth_or_array_layers: 1,
         };
 
+        let result_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Result texture"),
+            size: texture_size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+
+        let result_texture_view = result_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // #TODO color mutation
+        let color = [1f32, 0f32, 0f32, 1f32];
+
+        let color_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Color buffer"),
+            contents: bytemuck::bytes_of(&color),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        
+
+        let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        
+        /*
         let staging_buffer_size: usize = (width * height) as usize * std::mem::size_of::<Vec4>();
 
         let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -121,26 +149,13 @@ impl RenderView {
             size: staging_buffer_size as u64,
             mapped_at_creation: false,
         });
+        */
 
-        let result_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba32Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("Result texture"),
-            view_formats: &[],
-        });
+        
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("blit shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("./blit.wgsl").into()),
-        });
-
-        let texture_bind_group_layout =
+        let blit_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("texture_bind_group_layout"),
+                label: Some("Blit bind group layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -161,51 +176,98 @@ impl RenderView {
                 ],
             });
 
-        let result_texture_view =
-            result_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
+        let compute_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Compute bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
         });
 
-        let textures_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
+        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Bind group blit"),
+            layout: &blit_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&result_texture_view),
+                    resource: wgpu::BindingResource::TextureView(&result_texture_view)
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&result_sampler),
-                },
+                }
             ],
-            label: Some("textures_bind_group"),
         });
 
-        let render_pipeline_layout =
+        let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Bind group compute"),
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&result_texture_view)
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(color_buffer.as_entire_buffer_binding()),
+                }
+            ],
+        });
+ 
+
+        let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],
+                label: Some("Compute pipeline layout"),
+                bind_group_layouts: &[&compute_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+        let blit_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Blit pipeline layout"),
+                bind_group_layouts: &[&blit_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Compute pipeline"),
+            layout: Some(&compute_pipeline_layout),
+            module: &cs_module,
+            entry_point: "main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
+
+        let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit pipeline"),
+            layout: Some(&blit_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: &blit_module,
                 entry_point: "vs_main",
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: &blit_module,
                 entry_point: "fs_main",
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
@@ -239,10 +301,12 @@ impl RenderView {
             .write()
             .callback_resources
             .insert(FullScreenTriangleRenderResources {
-                pipeline: render_pipeline,
-                bind_group: textures_bind_group,
-                staging_buffer,
-                result_texture,
+                blit_pipeline,
+                blit_bind_group,
+                compute_pipeline,
+                compute_bind_group,
+                color_buffer,
+                settings,
             });
 
         Some(Self {})
@@ -265,7 +329,7 @@ struct Settings {
 #[derive(Debug)]
 enum PaneType {
     Settings(Arc<Mutex<Settings>>),
-    Render(Arc<Receiver<Vec<Color>>>),
+    Render(()),
 }
 
 #[derive(Debug)]
@@ -356,7 +420,6 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                         rect,
                         RenderViewCallback {
-                            receiver: rx.clone(),
                         },
                     ));
                 });
@@ -404,17 +467,16 @@ impl Editor {
         _cc: &eframe::CreationContext<'_>,
         width: u32,
         height: u32,
-        rx: Receiver<Vec<Color>>,
         input_tx: single_value_channel::Updater<Mat4>,
         settings: Arc<Mutex<Settings>>,
     ) -> Self {
         catppuccin_egui::set_theme(&_cc.egui_ctx, catppuccin_egui::MOCHA);
-        let tree = create_tree(rx, settings.clone());
+        let tree = create_tree(settings.clone());
         Self {
-            viewport: RenderView::new(_cc, width, height),
+            viewport: RenderView::new(_cc, width, height, settings.clone()),
             tree,
             input_tx,
-            settings,
+            settings: settings.clone(),
             camera_to_world: View::default(),
         }
     }
@@ -562,8 +624,6 @@ fn main() -> Result<(), eframe::Error> {
 
     let (matrix_receiver, matrix_updater) =
         single_value_channel::channel_starting_with(Mat4::IDENTITY);
-    let (render_result_tx, render_result_rx): (Sender<Vec<Color>>, Receiver<Vec<Color>>) =
-        crossbeam_channel::bounded(3);
 
     let settings: Settings = Settings {
         background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
@@ -576,24 +636,9 @@ fn main() -> Result<(), eframe::Error> {
         progress: 0f32,
         picked_path: None,
     };
+
     let settings = Arc::new(Mutex::new(settings));
 
-    let path_tracer_render_lock = Arc::new(RwLock::new(PathTracerRenderContext::new(
-        256,
-        256,
-        render_result_tx.clone(),
-        matrix_receiver,
-        settings.clone(),
-    )));
-    let pt_render = path_tracer_render_lock.clone();
-
-    let mut renderer: Renderer = Renderer::new();
-
-    thread::spawn(move || loop {
-        if let Ok(mut p) = pt_render.write() {
-            renderer.run_iteration(&mut p);
-        }
-    });
 
     eframe::run_native(
         "Strelka",
@@ -603,7 +648,6 @@ fn main() -> Result<(), eframe::Error> {
                 cc,
                 256,
                 256,
-                render_result_rx,
                 matrix_updater,
                 settings,
             )))
@@ -612,7 +656,6 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn create_tree(
-    render_result_rx: Receiver<Vec<Color>>,
     settings: Arc<Mutex<Settings>>,
 ) -> egui_tiles::Tree<Pane> {
     let mut next_view_nr = 0;
@@ -631,7 +674,7 @@ fn create_tree(
 
     let render_pane = Pane {
         nr: 0,
-        kind: PaneType::Render(Arc::new(render_result_rx)),
+        kind: PaneType::Render(()),
     };
     tabs.push(tiles.insert_pane(render_pane));
 
