@@ -1,15 +1,17 @@
 //#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use eframe::egui_wgpu::{self, wgpu};
 use eframe::wgpu::util::DeviceExt;
 use eframe::wgpu::{include_wgsl, BufferUsages, ComputePassDescriptor};
-use egui::Key;
-use glam::{Mat4, Quat, Vec3, Vec4};
+use egui::{Key, Layout};
+use egui_tiles::{SimplificationOptions, Tree};
+use glam::{Mat4, Quat, Vec3};
+use log::info;
 
-use crossbeam_channel::{Receiver, Sender};
+const SCREEN_SIZE: [u32; 2] = [800u32, 600u32];
 
 struct RenderView {}
 
@@ -26,6 +28,7 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &FullScreenTriangleRenderResources = resources.get().unwrap();
+        
         {
             let mut compute_pass = egui_encoder.begin_compute_pass(&ComputePassDescriptor {
                 label: Some("Compute"),
@@ -34,7 +37,9 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
             compute_pass.set_pipeline(&resources.compute_pipeline);
             compute_pass.set_bind_group(0, &resources.compute_bind_group, &[]);
             let size = screen_descriptor.size_in_pixels;
-            compute_pass.dispatch_workgroups(size[0], size[1], 1);
+            compute_pass.dispatch_workgroups(SCREEN_SIZE[0], SCREEN_SIZE[1], 1);
+
+            queue.write_buffer(&resources.size_buffer, 0, bytemuck::bytes_of(&size));
         }
 
         resources.prepare(device, queue); // TODO: pass screen dims here
@@ -60,21 +65,21 @@ struct FullScreenTriangleRenderResources {
 
     settings: Arc<Mutex<Settings>>,
     color_buffer: wgpu::Buffer,
+    matrix_buffer: wgpu::Buffer,
+    size_buffer: wgpu::Buffer,
 }
 
 impl FullScreenTriangleRenderResources {
     fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         if let Ok(settings) = self.settings.lock() {
             let color = settings.background_color;
+            let matrix = settings.matrix;
             queue.write_buffer(&self.color_buffer, 0, bytemuck::cast_slice(&[color[0], color[1], color[2], 1f32]));
+            queue.write_buffer(&self.matrix_buffer, 0, bytemuck::bytes_of(&matrix.to_cols_array()));
+
+            info!("{:?}", matrix.to_cols_array_2d());
         }
-        //let color = [255u8, 0u8, 0u8, 0u8];
-        // Update our uniform buffer with the angle from the UI
-        // queue.write_buffer(
-        //     &self.uniform_buffer,
-        //     0,
-        //     bytemuck::cast_slice(&[angle, 0.0, 0.0, 0.0]),
-        // );
+
     }
 
     fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
@@ -128,7 +133,20 @@ impl RenderView {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        
+        let camera_to_world = Mat4::IDENTITY;
+
+        let matrix_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Matrix buffer"),
+            contents: bytemuck::bytes_of(&camera_to_world.to_cols_array()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let size = [width, height];
+        let size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Size buffer"),
+            contents: bytemuck::bytes_of(&size),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
 
         let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -139,17 +157,7 @@ impl RenderView {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-        
-        /*
-        let staging_buffer_size: usize = (width * height) as usize * std::mem::size_of::<Vec4>();
 
-        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Staging Buffer"),
-            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            size: staging_buffer_size as u64,
-            mapped_at_creation: false,
-        });
-        */
 
         
 
@@ -199,6 +207,26 @@ impl RenderView {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -228,7 +256,15 @@ impl RenderView {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Buffer(color_buffer.as_entire_buffer_binding()),
-                }
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(matrix_buffer.as_entire_buffer_binding()),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(size_buffer.as_entire_buffer_binding()),
+                },
             ],
         });
  
@@ -306,6 +342,8 @@ impl RenderView {
                 compute_pipeline,
                 compute_bind_group,
                 color_buffer,
+                matrix_buffer,
+                size_buffer,
                 settings,
             });
 
@@ -324,6 +362,7 @@ struct Settings {
     progress: f32,
     ray_marching_step: f32,
     picked_path: Option<String>,
+    matrix: Mat4,
 }
 
 #[derive(Debug)]
@@ -409,8 +448,13 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 
                     let width = ui.max_rect().width();
                     let heigth = ui.max_rect().height();
+
+                    let width = SCREEN_SIZE[0] as f32;
+                    let height = SCREEN_SIZE[1] as f32;
+
                     let (rect, response) = ui.allocate_at_least(
-                        egui::Vec2::new(width, heigth - 20.0f32),
+                        //egui::Vec2::new(width, heigth - 20.0f32),
+                        egui::Vec2::new(width, height),
                         egui::Sense::drag(),
                     );
 
@@ -441,7 +485,6 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 struct Editor {
     viewport: Option<RenderView>,
     tree: egui_tiles::Tree<Pane>,
-    input_tx: single_value_channel::Updater<Mat4>,
     settings: Arc<Mutex<Settings>>,
     camera_to_world: View,
 }
@@ -457,7 +500,7 @@ impl View {
         Self {
             rotation_x: Quat::IDENTITY,
             rotation_y: Quat::IDENTITY,
-            translation: Vec3::NEG_Z * 120f32,
+            translation: Vec3::NEG_Z * 40f32,
         }
     }
 }
@@ -467,15 +510,28 @@ impl Editor {
         _cc: &eframe::CreationContext<'_>,
         width: u32,
         height: u32,
-        input_tx: single_value_channel::Updater<Mat4>,
-        settings: Arc<Mutex<Settings>>,
     ) -> Self {
         catppuccin_egui::set_theme(&_cc.egui_ctx, catppuccin_egui::MOCHA);
+
+        let settings: Settings = Settings {
+            background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
+            light_color: Vec3::new(1.0, 0.9, 0.9),
+            g: 0.6,
+            absorption: 0.13,
+            scattering: 0.8,
+            ray_marching_step: 10f32,
+            spp: 1f32,
+            progress: 0f32,
+            picked_path: None,
+            matrix: Mat4::IDENTITY
+        };
+    
+        let settings = Arc::new(Mutex::new(settings));
+
         let tree = create_tree(settings.clone());
         Self {
             viewport: RenderView::new(_cc, width, height, settings.clone()),
             tree,
-            input_tx,
             settings: settings.clone(),
             camera_to_world: View::default(),
         }
@@ -529,12 +585,11 @@ impl Editor {
 
     fn send_camera_matrix(&self) {
         let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
-        self.input_tx
-            .update(Mat4::from_rotation_translation(
+        if let Ok(mut settings) = self.settings.lock() {
+            settings.matrix = Mat4::from_rotation_translation(
                 rotation,
-                self.camera_to_world.translation,
-            ))
-            .expect("Cant send matrix");
+                self.camera_to_world.translation)
+        }
     }
 }
 
@@ -622,22 +677,9 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
-    let (matrix_receiver, matrix_updater) =
-        single_value_channel::channel_starting_with(Mat4::IDENTITY);
+    
 
-    let settings: Settings = Settings {
-        background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
-        light_color: Vec3::new(1.0, 0.9, 0.9),
-        g: 0.6,
-        absorption: 0.13,
-        scattering: 0.8,
-        ray_marching_step: 10f32,
-        spp: 1f32,
-        progress: 0f32,
-        picked_path: None,
-    };
-
-    let settings = Arc::new(Mutex::new(settings));
+    
 
 
     eframe::run_native(
@@ -646,10 +688,8 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(|cc| {
             Ok(Box::new(Editor::new(
                 cc,
-                256,
-                256,
-                matrix_updater,
-                settings,
+                SCREEN_SIZE[0],
+                SCREEN_SIZE[1],
             )))
         }),
     )
@@ -680,8 +720,9 @@ fn create_tree(
 
     tabs.push(tiles.insert_pane(gen_pane()));
 
-    // let root = tiles.insert_tab_tile(tabs);
+
+   // let root = tiles.insert_tab_tile(tabs);
     let root = tiles.insert_horizontal_tile(tabs);
 
-    egui_tiles::Tree::new("strelka_tree", root, tiles)
+    egui_tiles::Tree::new("strelka_tree", root, tiles)    
 }
