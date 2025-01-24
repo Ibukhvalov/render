@@ -2,25 +2,179 @@
 var output_texture: texture_storage_2d<rgba8unorm, write>;
 
 @group(0) @binding(1)
-var<uniform> color: vec4f;
+var<storage, read> volume_grid: VolumeGridStatic;
 
 @group(0) @binding(2)
-var<uniform> camera_to_world: mat4x4f;
+var<storage, read> weights: array<f32>;
+
+@group(0) @binding(3)
+var<uniform> uniforms: Uniforms;
 
 const width = 800.0;
 const height = 600.0;
 
+const INF = 99999.0;
+
 const ratio = width/height;
+
+const PI: f32 = 3.14159265358979323846;
+
+struct Uniforms {
+    color: vec4f,
+    camera_to_world: mat4x4f,
+    light_dir: vec4f,
+    light_col: vec4f,
+    absorption: f32,
+    scattering: f32,
+    g: f32,
+    step_size: f32,
+}
 
 struct Ray {
     origin: vec4f,
     direction: vec4f,
 }
 
+struct Aabb {
+    min: vec4f,
+    max: vec4f,
+}
+
+struct VolumeGridStatic {
+    size: vec4u,
+    shift: vec4i,
+    bbox: Aabb,
+}
+
 struct Sphere {
     origin: vec3f,
     radius: f32,
 }
+
+struct Interval {
+    start: f32,
+    end: f32,
+}
+
+struct RayRecord {
+    transparency: f32,
+    color: vec3f,
+}
+
+
+fn ray_at(ray: Ray, t: f32) -> vec3f {
+    return ray.origin.xyz + ray.direction.xyz * t;
+}
+
+fn create_ray(origin: vec3f, dir: vec3f) -> Ray {
+    return Ray(vec4f(origin, 1.0), vec4f(normalize(dir), 0.0));
+}
+
+fn hit_aabb(aabb: Aabb, ray: Ray) -> Interval {
+    let ray_orig = ray.origin.xyz;
+    let ray_dir = ray.direction.xyz;
+
+    var interval = Interval(0.0, INF);
+
+    for (var axis: u32 = 0; axis < 3; axis++) {
+        
+        let inv_d = 1.0 / ray_dir[axis];
+        var t0: f32;
+        var t1: f32;
+
+        if (inv_d > 0) {
+            t0 = (aabb.min[axis] - ray_orig[axis]) * inv_d;
+            t1 = (aabb.max[axis] - ray_orig[axis]) * inv_d;
+        } else {
+            t1 = (aabb.min[axis] - ray_orig[axis]) * inv_d;
+            t0 = (aabb.max[axis] - ray_orig[axis]) * inv_d;
+        }
+        
+
+        if (t0 > interval.start) {
+            interval.start = t0;
+        }
+        if (t1 < interval.end) {
+            interval.end = t1;
+        }
+
+        if (interval.start >= interval.end) {
+            return Interval(0.0, 0.0);
+        }
+    }
+
+    return interval;
+}
+
+
+fn get_weight(pos: vec3f) -> f32 {
+    let pos3u = vec3u(u32(floor(pos.x)), u32(floor(pos.y)), u32(floor(pos.z)));
+    let size = volume_grid.size.xyz;
+
+    if(pos3u.x < 0u || pos3u.x > size.x ||
+        pos3u.y < 0u || pos3u.y > size.y ||
+        pos3u.z < 0u || pos3u.z > size.z) {
+            return 0.0;
+    }
+    return weights[pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y];
+}
+
+fn get_color(ray: Ray) -> RayRecord {
+    let interval = hit_aabb(volume_grid.bbox, ray);
+    if(interval.start >= interval.end) {
+        return RayRecord(1.0, vec3f(0.0));
+    }
+
+    var transparency = 1.0;
+    var result = vec3f(0.0);
+    let ns = u32(floor(((interval.end - interval.start) / uniforms.step_size) + 0.5));
+
+    for(var n = 0u; n<ns; n++) {
+        if(transparency <= 0.001) {
+            break;
+        }
+
+        let t = interval.start + uniforms.step_size * (f32(n) + 0.5);
+        let sample_pos = ray_at(ray, t);
+        let sample_weight = get_weight(sample_pos);
+
+        if(sample_weight > 0.0) {
+            let sample_transparency = exp(-uniforms.step_size * sample_weight * (uniforms.scattering + uniforms.absorption));
+            transparency *= sample_transparency;
+
+            //light            
+            let ray_light = create_ray(sample_pos, uniforms.light_dir.xyz);
+            let interval_light = hit_aabb(volume_grid.bbox, ray_light);
+            if (interval_light.start < interval_light.end) {
+                let ns_light = u32(floor((interval.end / uniforms.step_size)+0.5));
+
+                var density_light = 0.0;
+
+                for(var nl = 0u; nl < ns_light; nl++) {
+                    let t_light = min(f32(nl) * uniforms.step_size, interval_light.end);
+                    let sample_pos_light = ray_at(ray_light, t_light);
+                    let sample_weight_light = get_weight(sample_pos_light);
+                    density_light += sample_weight_light;
+                }
+
+                let light_ray_attenutation = exp(-density_light * uniforms.step_size * (uniforms.absorption + uniforms.scattering));
+                let cos_theta = dot(ray.direction.xyz, -uniforms.light_dir.xyz) / (length(ray.direction.xyz) * length(uniforms.light_dir.xyz));
+                result += uniforms.light_col.xyz * light_ray_attenutation * uniforms.scattering * transparency * uniforms.step_size * sample_weight * phase(cos_theta);
+        
+            }
+
+        }
+    }
+    return RayRecord(transparency, result);
+}
+
+fn phase(cos_theta: f32) -> f32 {
+    let g = uniforms.g;
+    let denom = 1.0 + g*g - 2.0 * g * cos_theta;
+    return 1.0 / (4.0 / PI) * (1.0 - g * g) / (denom * sqrt(denom));
+}
+
+
 
 
 
@@ -35,27 +189,17 @@ fn hit_sphere(sphere: Sphere, ray: Ray) -> bool {
 
 
 fn get_ray(u: f32, v: f32) -> Ray {
-    return Ray(camera_to_world * vec4f(0.0, 0.0, 0.0, 1.0),
-        camera_to_world * vec4f((u*2.0-1.0) * ratio, -(v*2.0-1.0), 1.0, 0.0));
+    return Ray(uniforms.camera_to_world * vec4f(0.0, 0.0, 0.0, 1.0),
+        normalize(uniforms.camera_to_world * vec4f((u*2.0-1.0) * ratio, -(v*2.0-1.0), 1.0, 0.0)));
 }
-
 
 @compute
 @workgroup_size(1)
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
-    let sphere = Sphere(vec3f(0.0), 20.0);
     let u = f32(global_id.x) / width; 
     let v = f32(global_id.y) / height; 
     let ray = get_ray(u,v);
-    
-    
-    if(hit_sphere(sphere, ray)) {
-        textureStore(output_texture, global_id.xy, vec4f(1.0,0.0,0.0,1.0));
-    } else {
-        let t = (ray.direction.y + 1.0) * 0.5;
-        let background = (1.0 - t) * vec3(1.0) + t * vec3(0.5,0.7,1.0);
-        textureStore(output_texture, global_id.xy, vec4f(background, 1.0));
-    }
-
-
+    let rec = get_color(ray);
+    textureStore(output_texture, global_id.xy, uniforms.color * rec.transparency + 
+    vec4f(rec.color, 1.0) );
 }

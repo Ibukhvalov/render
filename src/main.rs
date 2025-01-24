@@ -1,17 +1,46 @@
 //#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 
 use eframe::egui_wgpu::{self, wgpu};
 use eframe::wgpu::util::DeviceExt;
 use eframe::wgpu::{include_wgsl, BufferUsages, ComputePassDescriptor};
-use egui::{Key, Layout};
-use egui_tiles::{SimplificationOptions, Tree};
+use egui::{Key};
 use glam::{Mat4, Quat, Vec3};
-use log::info;
+use bytemuck::{Pod, Zeroable};
 
 const SCREEN_SIZE: [u32; 2] = [800u32, 600u32];
+
+#[repr(C)]
+#[derive(Pod, Zeroable, Clone, Copy)]
+pub struct Uniforms {
+    color: [f32; 4],
+    camera_to_world: [[f32;4]; 4],
+    light_dir: [f32; 4],
+    light_col: [f32; 4],
+    absorption: f32,
+    scattering: f32,
+    g: f32,
+    step_size: f32,
+}
+
+/*color: vec4f,
+    camera_to_world: mat4x4f,
+    light_dir: vec3f,
+    light_col: vec3f,
+    absorption: f32,
+    scattering: f32,
+    g: f32,
+    step_size: f32, */
+    
+mod aabb;
+mod volume_grid;
+
+use log::debug;
+use volume_grid::VolumeGridStatic;
 
 struct RenderView {}
 
@@ -36,10 +65,7 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
             });
             compute_pass.set_pipeline(&resources.compute_pipeline);
             compute_pass.set_bind_group(0, &resources.compute_bind_group, &[]);
-            let size = screen_descriptor.size_in_pixels;
             compute_pass.dispatch_workgroups(SCREEN_SIZE[0], SCREEN_SIZE[1], 1);
-
-            queue.write_buffer(&resources.size_buffer, 0, bytemuck::bytes_of(&size));
         }
 
         resources.prepare(device, queue); // TODO: pass screen dims here
@@ -64,20 +90,28 @@ struct FullScreenTriangleRenderResources {
     compute_bind_group: wgpu::BindGroup,
 
     settings: Arc<Mutex<Settings>>,
-    color_buffer: wgpu::Buffer,
-    matrix_buffer: wgpu::Buffer,
-    size_buffer: wgpu::Buffer,
+    uniforms_buffer: wgpu::Buffer
 }
 
 impl FullScreenTriangleRenderResources {
     fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue) {
         if let Ok(settings) = self.settings.lock() {
             let color = settings.background_color;
-            let matrix = settings.matrix;
-            queue.write_buffer(&self.color_buffer, 0, bytemuck::cast_slice(&[color[0], color[1], color[2], 1f32]));
-            queue.write_buffer(&self.matrix_buffer, 0, bytemuck::bytes_of(&matrix.to_cols_array()));
+            let camera_to_world = settings.matrix;
+            let light_color = settings.light_color * 10f32;
+            let uniforms = Uniforms {
+                color: [color[0], color[1], color[2], 1f32],
+                camera_to_world: camera_to_world.to_cols_array_2d(),
+                g: settings.g,
+                light_col: [light_color.x, light_color.y, light_color.z, 1.0],
+                light_dir: [1.0,1.0,1.0, 1.0],
+                absorption: settings.absorption,
+                scattering: settings.scattering,
+                step_size: settings.ray_marching_step,
+            };
 
-            info!("{:?}", matrix.to_cols_array_2d());
+            queue.write_buffer(&self.uniforms_buffer, 0, bytemuck::bytes_of(&uniforms));
+
         }
 
     }
@@ -98,8 +132,25 @@ impl RenderView {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
 
 
-        let device = &wgpu_render_state.device;
+        //let filename = std::env::args()
+        //    .nth(1)
+        //    .expect("Missing VDB filename as first argument");
+        let filename = String::from("./data/vdbAssets/wdas_cloud_sixteenth.vdb");
+        
 
+        let mut vdb_reader = vdb_rs::VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
+        let grid_to_load = vdb_reader
+            .available_grids()
+            .first()
+            .cloned()
+            .unwrap_or(String::new());
+
+        let (grid_static, weights) = VolumeGridStatic::build_from_vdb_grid(
+            vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap());
+
+        let flattened_weights: Vec<f32> = weights.into_iter().flatten().flatten().collect();
+
+        let device = &wgpu_render_state.device;
 
         let blit_module = device.create_shader_module(include_wgsl!("blit.wgsl"));
         let cs_module = device.create_shader_module(include_wgsl!("compute.wgsl"));
@@ -124,29 +175,39 @@ impl RenderView {
 
         let result_texture_view = result_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // #TODO color mutation
-        let color = [1f32, 0f32, 0f32, 1f32];
-
-        let color_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Color buffer"),
-            contents: bytemuck::bytes_of(&color),
+        
+        let uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniforms buffer"),
+            size: std::mem::size_of::<Uniforms>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
-        let camera_to_world = Mat4::IDENTITY;
-
-        let matrix_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Matrix buffer"),
-            contents: bytemuck::bytes_of(&camera_to_world.to_cols_array()),
+        /*
+        let _uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniforms buffer"),
+            contents: bytemuck::bytes_of(&uniforms),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
+        */
 
-        let size = [width, height];
-        let size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Size buffer"),
-            contents: bytemuck::bytes_of(&size),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        let volume_grid_static_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Volume grid buffer"),
+            contents: bytemuck::bytes_of(&grid_static),
+            usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
+
+        let weights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Weights buffer"),
+            contents: bytemuck::cast_slice(&flattened_weights),
+            usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
+        });
+
+
+        println!("weights {}", weights_buffer.size());
+        println!("volume {}", volume_grid_static_buffer.size());
+        println!("uni {}", uniforms_buffer.size());
+
 
         let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -201,9 +262,9 @@ impl RenderView {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size: None,
+                        min_binding_size: None
                     },
                     count: None,
                 },
@@ -211,9 +272,9 @@ impl RenderView {
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size: None,
+                        min_binding_size: None
                     },
                     count: None,
                 },
@@ -251,19 +312,19 @@ impl RenderView {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&result_texture_view)
+                    resource: wgpu::BindingResource::TextureView(&result_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Buffer(color_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(volume_grid_static_buffer.as_entire_buffer_binding()),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Buffer(matrix_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(weights_buffer.as_entire_buffer_binding()),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Buffer(size_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(uniforms_buffer.as_entire_buffer_binding()),
                 },
             ],
         });
@@ -341,9 +402,7 @@ impl RenderView {
                 blit_bind_group,
                 compute_pipeline,
                 compute_bind_group,
-                color_buffer,
-                matrix_buffer,
-                size_buffer,
+                uniforms_buffer,
                 settings,
             });
 
@@ -359,10 +418,25 @@ struct Settings {
     absorption: f32,
     scattering: f32,
     spp: f32,
-    progress: f32,
     ray_marching_step: f32,
     picked_path: Option<String>,
     matrix: Mat4,
+}
+
+impl Settings {
+    fn default() -> Self {
+        Self {
+                background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
+                light_color: Vec3::new(1.0, 0.9, 0.9),
+                g: 0.6,
+                absorption: 0.02,
+                scattering: 0.4,
+                ray_marching_step: 10f32,
+                spp: 1f32,
+                picked_path: None,
+                matrix: Mat4::IDENTITY
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -418,19 +492,18 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     ui.label("light color");
                     ui.add(egui::Slider::new(&mut settings.g, -1.0..=1.0).text("g"));
                     ui.add(
-                        egui::Slider::new(&mut settings.absorption, 0.0..=1.5).text("absorption"),
+                        egui::Slider::new(&mut settings.absorption, 0.0..=0.1).text("absorption"),
                     );
                     ui.add(
-                        egui::Slider::new(&mut settings.scattering, 0.0..=2.0).text("scattering"),
+                        egui::Slider::new(&mut settings.scattering, 0.0..=0.5).text("scattering"),
                     );
-                    ui.add(
-                        egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"),
-                    );
+                    //ui.add(
+                    //    egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"),
+                    //);
                     ui.add(
                         egui::Slider::new(&mut settings.ray_marching_step, 1.0..=10.0)
                             .text("ray marching step"),
                     );
-                    ui.add(egui::ProgressBar::new(settings.progress).desired_width(200.0));
                 } else {
                     ui.label("Failed to acquire settings lock.");
                 }
@@ -500,7 +573,7 @@ impl View {
         Self {
             rotation_x: Quat::IDENTITY,
             rotation_y: Quat::IDENTITY,
-            translation: Vec3::NEG_Z * 40f32,
+            translation: Vec3::NEG_Z * 150f32,
         }
     }
 }
@@ -513,18 +586,7 @@ impl Editor {
     ) -> Self {
         catppuccin_egui::set_theme(&_cc.egui_ctx, catppuccin_egui::MOCHA);
 
-        let settings: Settings = Settings {
-            background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
-            light_color: Vec3::new(1.0, 0.9, 0.9),
-            g: 0.6,
-            absorption: 0.13,
-            scattering: 0.8,
-            ray_marching_step: 10f32,
-            spp: 1f32,
-            progress: 0f32,
-            picked_path: None,
-            matrix: Mat4::IDENTITY
-        };
+        let settings = Settings::default();
     
         let settings = Arc::new(Mutex::new(settings));
 
