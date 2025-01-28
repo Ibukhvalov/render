@@ -15,7 +15,7 @@ const height = 600.0;
 
 const INF = 99999.0;
 
-const ratio = width/height;
+const ratio = width / height;
 
 const PI: f32 = 3.14159265358979323846;
 
@@ -77,28 +77,21 @@ fn hit_aabb(aabb: Aabb, ray: Ray) -> Interval {
     var interval = Interval(0.0, INF);
 
     for (var axis: u32 = 0; axis < 3; axis++) {
-        
+
         let inv_d = 1.0 / ray_dir[axis];
-        var t0: f32;
-        var t1: f32;
+        var t0: f32 = (aabb.min[axis] - ray_orig[axis]) * inv_d;
+        var t1: f32 = (aabb.max[axis] - ray_orig[axis]) * inv_d;
 
-        if (inv_d > 0) {
-            t0 = (aabb.min[axis] - ray_orig[axis]) * inv_d;
-            t1 = (aabb.max[axis] - ray_orig[axis]) * inv_d;
-        } else {
-            t1 = (aabb.min[axis] - ray_orig[axis]) * inv_d;
-            t0 = (aabb.max[axis] - ray_orig[axis]) * inv_d;
-        }
-        
-
-        if (t0 > interval.start) {
-            interval.start = t0;
-        }
-        if (t1 < interval.end) {
-            interval.end = t1;
+        if inv_d < 0 {
+            let tmp = t0;
+            t0 = t1;
+            t1 = tmp;
         }
 
-        if (interval.start >= interval.end) {
+        interval.start = max(t0, interval.start);
+        interval.end = min(t1, interval.end);
+
+        if interval.start >= interval.end {
             return Interval(0.0, 0.0);
         }
     }
@@ -106,22 +99,21 @@ fn hit_aabb(aabb: Aabb, ray: Ray) -> Interval {
     return interval;
 }
 
-
 fn get_weight(pos: vec3f) -> f32 {
     let pos3u = vec3u(u32(floor(pos.x)), u32(floor(pos.y)), u32(floor(pos.z)));
     let size = volume_grid.size.xyz;
 
-    if(pos3u.x < 0u || pos3u.x > size.x ||
-        pos3u.y < 0u || pos3u.y > size.y ||
-        pos3u.z < 0u || pos3u.z > size.z) {
-            return 0.0;
+    if any(pos3u < vec3u(0u) || pos3u >= size) {
+        return 0.0;
     }
-    return weights[pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y];
+
+    let linear_index = pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y;
+    return weights[linear_index];
 }
 
 fn get_color(ray: Ray) -> RayRecord {
     let interval = hit_aabb(volume_grid.bbox, ray);
-    if(interval.start >= interval.end) {
+    if interval.start >= interval.end {
         return RayRecord(1.0, vec3f(0.0));
     }
 
@@ -129,8 +121,8 @@ fn get_color(ray: Ray) -> RayRecord {
     var result = vec3f(0.0);
     let ns = u32(floor(((interval.end - interval.start) / uniforms.step_size) + 0.5));
 
-    for(var n = 0u; n<ns; n++) {
-        if(transparency <= 0.001) {
+    for (var n = 0u; n < ns; n++) {
+        if transparency <= 0.001 {
             break;
         }
 
@@ -138,19 +130,19 @@ fn get_color(ray: Ray) -> RayRecord {
         let sample_pos = ray_at(ray, t);
         let sample_weight = get_weight(sample_pos);
 
-        if(sample_weight > 0.0) {
+        if sample_weight > 0.0 {
             let sample_transparency = exp(-uniforms.step_size * sample_weight * (uniforms.scattering + uniforms.absorption));
             transparency *= sample_transparency;
 
             //light            
             let ray_light = create_ray(sample_pos, uniforms.light_dir.xyz);
             let interval_light = hit_aabb(volume_grid.bbox, ray_light);
-            if (interval_light.start < interval_light.end) {
-                let ns_light = u32(floor((interval.end / uniforms.step_size)+0.5));
+            if interval_light.start < interval_light.end {
+                let ns_light = u32(floor((interval_light.end / uniforms.step_size) + 0.5));
 
                 var density_light = 0.0;
 
-                for(var nl = 0u; nl < ns_light; nl++) {
+                for (var nl = 0u; nl < ns_light; nl++) {
                     let t_light = min(f32(nl) * uniforms.step_size, interval_light.end);
                     let sample_pos_light = ray_at(ray_light, t_light);
                     let sample_weight_light = get_weight(sample_pos_light);
@@ -160,9 +152,7 @@ fn get_color(ray: Ray) -> RayRecord {
                 let light_ray_attenutation = exp(-density_light * uniforms.step_size * (uniforms.absorption + uniforms.scattering));
                 let cos_theta = dot(ray.direction.xyz, -uniforms.light_dir.xyz) / (length(ray.direction.xyz) * length(uniforms.light_dir.xyz));
                 result += uniforms.light_col.xyz * light_ray_attenutation * uniforms.scattering * transparency * uniforms.step_size * sample_weight * phase(cos_theta);
-        
             }
-
         }
     }
     return RayRecord(transparency, result);
@@ -170,36 +160,21 @@ fn get_color(ray: Ray) -> RayRecord {
 
 fn phase(cos_theta: f32) -> f32 {
     let g = uniforms.g;
-    let denom = 1.0 + g*g - 2.0 * g * cos_theta;
+    let denom = 1.0 + g * g - 2.0 * g * cos_theta;
     return 1.0 / (4.0 / PI) * (1.0 - g * g) / (denom * sqrt(denom));
 }
 
-
-
-
-
-fn hit_sphere(sphere: Sphere, ray: Ray) -> bool {
-    let oc = ray.origin.xyz - sphere.origin;
-    let a = dot(ray.direction.xyz, ray.direction.xyz);
-    let b = 2.0 * dot(oc, ray.direction.xyz);
-    let c = dot(oc, oc) - sphere.radius*sphere.radius;
-
-    return (b*b - 4*a*c) > 0;
-}
-
-
 fn get_ray(u: f32, v: f32) -> Ray {
     return Ray(uniforms.camera_to_world * vec4f(0.0, 0.0, 0.0, 1.0),
-        normalize(uniforms.camera_to_world * vec4f((u*2.0-1.0) * ratio, -(v*2.0-1.0), 1.0, 0.0)));
+        normalize(uniforms.camera_to_world * vec4f((u * 2.0 - 1.0) * ratio, -(v * 2.0 - 1.0), 1.0, 0.0)));
 }
 
 @compute
 @workgroup_size(1)
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
-    let u = f32(global_id.x) / width; 
-    let v = f32(global_id.y) / height; 
-    let ray = get_ray(u,v);
+    let u = f32(global_id.x) / width;
+    let v = f32(global_id.y) / height;
+    let ray = get_ray(u, v);
     let rec = get_color(ray);
-    textureStore(output_texture, global_id.xy, uniforms.color * rec.transparency + 
-    vec4f(rec.color, 1.0) );
+    textureStore(output_texture, global_id.xy, uniforms.color * rec.transparency + vec4f(rec.color, 1.0));
 }

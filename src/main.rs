@@ -25,6 +25,7 @@ pub struct Uniforms {
     scattering: f32,
     g: f32,
     step_size: f32,
+    //samples_per_pixel: u16,
 }
 
 /*color: vec4f,
@@ -98,7 +99,7 @@ impl FullScreenTriangleRenderResources {
         if let Ok(settings) = self.settings.lock() {
             let color = settings.background_color;
             let camera_to_world = settings.matrix;
-            let light_color = settings.light_color * 10f32;
+            let light_color = settings.light_color * settings.lightness;
             let uniforms = Uniforms {
                 color: [color[0], color[1], color[2], 1f32],
                 camera_to_world: camera_to_world.to_cols_array_2d(),
@@ -108,6 +109,7 @@ impl FullScreenTriangleRenderResources {
                 absorption: settings.absorption,
                 scattering: settings.scattering,
                 step_size: settings.ray_marching_step,
+                //samples_per_pixel: settings.spp,
             };
 
             queue.write_buffer(&self.uniforms_buffer, 0, bytemuck::bytes_of(&uniforms));
@@ -132,10 +134,10 @@ impl RenderView {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
 
 
-        //let filename = std::env::args()
-        //    .nth(1)
-        //    .expect("Missing VDB filename as first argument");
-        let filename = String::from("./data/vdbAssets/wdas_cloud_sixteenth.vdb");
+        let filename = std::env::args()
+            .nth(1)
+            .expect("Missing VDB filename as first argument");
+        //let filename = String::from("./data/vdbAssets/wdas_cloud_sixteenth.vdb");
         
 
         let mut vdb_reader = vdb_rs::VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
@@ -183,13 +185,6 @@ impl RenderView {
             mapped_at_creation: false,
         });
 
-        /*
-        let _uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniforms buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-        */
 
         let volume_grid_static_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Volume grid buffer"),
@@ -203,10 +198,6 @@ impl RenderView {
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
-
-        println!("weights {}", weights_buffer.size());
-        println!("volume {}", volume_grid_static_buffer.size());
-        println!("uni {}", uniforms_buffer.size());
 
 
         let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -414,10 +405,11 @@ impl RenderView {
 struct Settings {
     background_color: Vec3,
     light_color: Vec3,
+    lightness: f32,
     g: f32,
     absorption: f32,
     scattering: f32,
-    spp: f32,
+    //spp: u16,
     ray_marching_step: f32,
     picked_path: Option<String>,
     matrix: Mat4,
@@ -428,13 +420,14 @@ impl Settings {
         Self {
                 background_color: Vec3::new(0.7f32, 0.7f32, 0.9f32),
                 light_color: Vec3::new(1.0, 0.9, 0.9),
+                lightness: 10f32,
                 g: 0.6,
                 absorption: 0.02,
                 scattering: 0.4,
                 ray_marching_step: 10f32,
-                spp: 1f32,
+                //spp: 1u16,
                 picked_path: None,
-                matrix: Mat4::IDENTITY
+                matrix: Mat4::IDENTITY,
         }
     }
 }
@@ -497,9 +490,9 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     ui.add(
                         egui::Slider::new(&mut settings.scattering, 0.0..=0.5).text("scattering"),
                     );
-                    //ui.add(
-                    //    egui::Slider::new(&mut settings.spp, 1.0..=50.0).text("samples per pixel"),
-                    //);
+                    ui.add(
+                       egui::Slider::new(&mut settings.lightness, 5.0..=20.0).text("lightness"),
+                    );
                     ui.add(
                         egui::Slider::new(&mut settings.ray_marching_step, 1.0..=10.0)
                             .text("ray marching step"),
@@ -733,7 +726,7 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([SCREEN_SIZE[0] as f32, SCREEN_SIZE[1] as f32]),
         renderer: eframe::Renderer::Wgpu,
         wgpu_options: options,
         ..Default::default()
