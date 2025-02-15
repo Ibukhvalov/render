@@ -5,7 +5,7 @@ var output_texture: texture_storage_2d<rgba8unorm, write>;
 var<storage, read> volume_grid: VolumeGridStatic;
 
 @group(0) @binding(2)
-var<storage, read> weights: array<f32>;
+var<storage, read> weights: array<u32>;
 
 @group(0) @binding(3)
 var<uniform> uniforms: Uniforms;
@@ -13,11 +13,16 @@ var<uniform> uniforms: Uniforms;
 const width = 800.0;
 const height = 600.0;
 
+const base_weight = 0.4;
+
 const INF = 99999.0;
 
 const ratio = width / height;
 
 const PI: f32 = 3.14159265358979323846;
+
+const BASE_WEIGHTS: f32 = 0.4;
+
 
 struct Uniforms {
     color: vec4f,
@@ -106,9 +111,17 @@ fn get_weight(pos: vec3f) -> f32 {
     if any(pos3u < vec3u(0u) || pos3u >= size) {
         return 0.0;
     }
-
+    
     let linear_index = pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y;
-    return weights[linear_index];
+
+    let array_index = linear_index / 32u;
+    let bit_index = linear_index % 32u;
+    let current_pack = weights[array_index];
+    if(current_pack[1u << (31u - bit_index)]) {
+        return BASE_WEIGHT;
+    }
+
+    return 0.0;
 }
 
 fn get_color(ray: Ray) -> RayRecord {
@@ -128,7 +141,11 @@ fn get_color(ray: Ray) -> RayRecord {
 
         let t = interval.start + uniforms.step_size * (f32(n) + 0.5);
         let sample_pos = ray_at(ray, t);
-        let sample_weight = get_weight(sample_pos);
+        var sample_weight = 0.0;
+        
+        sample_weight = get_weight(sample_pos);
+        
+        
 
         if sample_weight > 0.0 {
             let sample_transparency = exp(-uniforms.step_size * sample_weight * (uniforms.scattering + uniforms.absorption));

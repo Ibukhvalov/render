@@ -150,7 +150,6 @@ impl RenderView {
         let (grid_static, weights) = VolumeGridStatic::build_from_vdb_grid(
             vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap());
 
-        let flattened_weights: Vec<f32> = weights.into_iter().flatten().flatten().collect();
 
         let device = &wgpu_render_state.device;
 
@@ -194,7 +193,7 @@ impl RenderView {
 
         let weights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Weights buffer"),
-            contents: bytemuck::cast_slice(&flattened_weights),
+            contents: bytemuck::cast_slice(weights.as_slice()),
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
 
