@@ -1,22 +1,23 @@
-mod tree_behaviour;
-mod view;
+mod fps_controller;
 mod render_view;
 mod settings;
-mod fps_controller;
+mod tree_behaviour;
+mod view;
 
-use std::{collections::HashSet, sync::{Arc, Mutex}};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use egui::Key;
 use fps_controller::FPSController;
 use glam::{Mat4, Quat, Vec3};
-use log::info;
 use render_view::RenderView;
-use tree_behaviour::TreeBehavior;
 use settings::Settings;
+use tree_behaviour::TreeBehavior;
 use view::View;
 
 use crate::{CAMERA_MOVE_SPEED, CAMERA_ROTATION_SPEED};
-
 
 pub struct Editor {
     _viewport: Option<RenderView>,
@@ -26,15 +27,11 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(
-        _cc: &eframe::CreationContext<'_>,
-        width: u32,
-        height: u32,
-    ) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>, width: u32, height: u32) -> Self {
         catppuccin_egui::set_theme(&_cc.egui_ctx, catppuccin_egui::MOCHA);
 
         let settings = Settings::default();
-    
+
         let settings = Arc::new(Mutex::new(settings));
 
         let tree = TreeBehavior::create_tree(settings.clone());
@@ -52,7 +49,7 @@ impl Editor {
         let view_dir = (rotation * Vec3::Z).normalize();
         let right_dir = (rotation * Vec3::X).normalize();
         let up_dir = (Vec3::Y).normalize();
-        
+
         for key in keys {
             self.camera_to_world.translation += match key {
                 Key::W => view_dir,
@@ -63,7 +60,7 @@ impl Editor {
                 Key::E => up_dir,
                 _ => Vec3::ZERO,
             } * CAMERA_MOVE_SPEED;
-            
+
             self.camera_to_world.rotation_x *= match key {
                 Key::ArrowUp => Quat::from_rotation_x(-0.01f32 * CAMERA_ROTATION_SPEED),
                 Key::ArrowDown => Quat::from_rotation_x(0.01f32 * CAMERA_ROTATION_SPEED),
@@ -75,15 +72,10 @@ impl Editor {
                 Key::ArrowLeft => Quat::from_rotation_y(-0.01f32 * CAMERA_ROTATION_SPEED),
                 _ => Quat::IDENTITY,
             };
-                
-            }
-        
-        self.send_camera_matrix();
-        
-    }
- 
+        }
 
-    
+        self.send_camera_matrix();
+    }
 
     fn handle_mouse(&mut self, _pointer: egui::PointerState) {
         //self.camera_to_world.rotation_x *= Quat::from_rotation_y(pointer.delta().x * 0.002);
@@ -93,16 +85,14 @@ impl Editor {
     fn send_camera_matrix(&self) {
         let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
         if let Ok(mut settings) = self.settings.lock() {
-            settings.matrix = Mat4::from_rotation_translation(
-                rotation,
-                self.camera_to_world.translation)
+            settings.matrix =
+                Mat4::from_rotation_translation(rotation, self.camera_to_world.translation)
         }
     }
 }
 
 impl eframe::App for Editor {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        info!("UPDATE");
         let input = ctx.input(|i| i.clone());
         self.handle_key_down(input.keys_down);
         self.handle_mouse(input.pointer);

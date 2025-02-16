@@ -10,10 +10,14 @@ pub struct FPSController {
     sum: f32,
 }
 
-
 impl FPSController {
     pub fn default() -> Self {
-        Self {buffer: [0f32; MAX_BUFFER_SIZE], index: 0, sum: 0f32, last_time: Instant::now()}
+        Self {
+            buffer: [0f32; MAX_BUFFER_SIZE],
+            index: 0,
+            sum: 0f32,
+            last_time: Instant::now(),
+        }
     }
 
     pub fn update(&mut self) {
@@ -29,7 +33,6 @@ impl FPSController {
         };
         self.last_time = Instant::now();
     }
-
 
     pub fn get_current_fps(&self) -> f32 {
         self.sum * INV_MAX_BUFFER_SIZE

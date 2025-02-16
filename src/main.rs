@@ -1,8 +1,8 @@
 //#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod aabb;
-mod volume_grid;
 mod editor;
+mod volume_grid;
 
 use editor::Editor;
 use eframe::wgpu;
@@ -13,7 +13,6 @@ const SCREEN_SIZE: [u32; 2] = [800u32, 600u32];
 const CAMERA_MOVE_SPEED: f32 = 2f32;
 const CAMERA_ROTATION_SPEED: f32 = 2f32;
 const WORKGROUP_SIZE: [u32; 2] = [16u32, 16u32];
-
 
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt::init();
@@ -41,24 +40,16 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([SCREEN_SIZE[0] as f32, SCREEN_SIZE[1] as f32]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([SCREEN_SIZE[0] as f32, SCREEN_SIZE[1] as f32]),
         renderer: eframe::Renderer::Wgpu,
         wgpu_options: options,
         ..Default::default()
-    };  
-    
-
+    };
 
     eframe::run_native(
         "Strelka",
         options,
-        Box::new(|cc| {
-            Ok(Box::new(Editor::new(
-                cc,
-                SCREEN_SIZE[0],
-                SCREEN_SIZE[1],
-            )))
-        }),
+        Box::new(|cc| Ok(Box::new(Editor::new(cc, SCREEN_SIZE[0], SCREEN_SIZE[1])))),
     )
 }
-

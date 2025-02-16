@@ -1,13 +1,13 @@
 mod resources;
 
-use resources::*;
-use eframe::wgpu::{self, BufferUsages, util::DeviceExt};
-use std::io::BufReader;
-use std::fs::File;
-use crate::volume_grid::VolumeGridStatic;
-use std::sync::{Arc, Mutex};
 use super::settings::Settings;
+use crate::volume_grid::VolumeGridStatic;
 use eframe::wgpu::include_wgsl;
+use eframe::wgpu::{self, util::DeviceExt, BufferUsages};
+use resources::*;
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::{Arc, Mutex};
 
 use crate::{SCREEN_SIZE, WORKGROUP_SIZE};
 
@@ -26,7 +26,7 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
         resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
         let resources: &FullScreenTriangleRenderResources = resources.get().unwrap();
-        
+
         {
             let mut compute_pass = egui_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Compute"),
@@ -34,7 +34,11 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
             });
             compute_pass.set_pipeline(&resources.compute_pipeline);
             compute_pass.set_bind_group(0, &resources.compute_bind_group, &[]);
-            compute_pass.dispatch_workgroups(SCREEN_SIZE[0]/WORKGROUP_SIZE[0], SCREEN_SIZE[1]/WORKGROUP_SIZE[1], 1);
+            compute_pass.dispatch_workgroups(
+                SCREEN_SIZE[0] / WORKGROUP_SIZE[0],
+                SCREEN_SIZE[1] / WORKGROUP_SIZE[1],
+                1,
+            );
         }
 
         resources.prepare(device, queue); // TODO: pass screen dims here
@@ -53,16 +57,20 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
 }
 
 impl RenderView {
-    pub fn new<'a>(cc: &'a eframe::CreationContext<'a>, width: u32, height: u32, settings: Arc<Mutex<Settings>>) -> Option<Self> {
+    pub fn new<'a>(
+        cc: &'a eframe::CreationContext<'a>,
+        width: u32,
+        height: u32,
+        settings: Arc<Mutex<Settings>>,
+    ) -> Option<Self> {
         let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
-
 
         let filename = std::env::args()
             .nth(1)
             .expect("Missing VDB filename as first argument");
-        
 
-        let mut vdb_reader = vdb_rs::VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
+        let mut vdb_reader =
+            vdb_rs::VdbReader::new(BufReader::new(File::open(filename).unwrap())).unwrap();
         let grid_to_load = vdb_reader
             .available_grids()
             .first()
@@ -70,14 +78,13 @@ impl RenderView {
             .unwrap_or(String::new());
 
         let (grid_static, weights) = VolumeGridStatic::build_from_vdb_grid(
-            vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap());
-
+            vdb_reader.read_grid::<half::f16>(&grid_to_load).unwrap(),
+        );
 
         let device = &wgpu_render_state.device;
 
         let blit_module = device.create_shader_module(include_wgsl!("../shaders/blit.wgsl"));
         let cs_module = device.create_shader_module(include_wgsl!("../shaders/compute.wgsl"));
-
 
         let texture_size = wgpu::Extent3d {
             width,
@@ -96,9 +103,9 @@ impl RenderView {
             view_formats: &[],
         });
 
-        let result_texture_view = result_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let result_texture_view =
+            result_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        
         let uniforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Uniforms buffer"),
             size: std::mem::size_of::<Uniforms>() as u64,
@@ -106,20 +113,18 @@ impl RenderView {
             mapped_at_creation: false,
         });
 
-
-        let volume_grid_static_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Volume grid buffer"),
-            contents: bytemuck::bytes_of(&grid_static),
-            usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
-        });
+        let volume_grid_static_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Volume grid buffer"),
+                contents: bytemuck::bytes_of(&grid_static),
+                usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
+            });
 
         let weights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Weights buffer"),
             contents: bytemuck::cast_slice(weights.as_slice()),
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
         });
-
-
 
         let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -130,9 +135,6 @@ impl RenderView {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
-
-
-        
 
         let blit_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -157,51 +159,52 @@ impl RenderView {
                 ],
             });
 
-        let compute_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Compute bind group layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Compute bind group layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
 
         let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Bind group blit"),
@@ -209,12 +212,12 @@ impl RenderView {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&result_texture_view)
+                    resource: wgpu::BindingResource::TextureView(&result_texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&result_sampler),
-                }
+                },
             ],
         });
 
@@ -228,19 +231,24 @@ impl RenderView {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Buffer(volume_grid_static_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(
+                        volume_grid_static_buffer.as_entire_buffer_binding(),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Buffer(weights_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(
+                        weights_buffer.as_entire_buffer_binding(),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::Buffer(uniforms_buffer.as_entire_buffer_binding()),
+                    resource: wgpu::BindingResource::Buffer(
+                        uniforms_buffer.as_entire_buffer_binding(),
+                    ),
                 },
             ],
         });
- 
 
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -249,12 +257,11 @@ impl RenderView {
                 push_constant_ranges: &[],
             });
 
-        let blit_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Blit pipeline layout"),
-                bind_group_layouts: &[&blit_bind_group_layout],
-                push_constant_ranges: &[],
-            });
+        let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Blit pipeline layout"),
+            bind_group_layouts: &[&blit_bind_group_layout],
+            push_constant_ranges: &[],
+        });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
@@ -264,7 +271,6 @@ impl RenderView {
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         });
-
 
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Blit pipeline"),

@@ -1,15 +1,13 @@
-use super::settings::Settings;
-use std::sync::{Arc, Mutex};
-use crate::SCREEN_SIZE;
 use super::render_view::RenderViewCallback;
+use super::settings::Settings;
+use crate::SCREEN_SIZE;
+use std::sync::{Arc, Mutex};
 pub struct TreeBehavior {}
-
 
 enum PaneType {
     Settings(Arc<Mutex<Settings>>),
     Render(()),
 }
-
 
 pub struct Pane {
     nr: usize,
@@ -17,9 +15,7 @@ pub struct Pane {
 }
 
 impl TreeBehavior {
-    pub fn create_tree(
-        settings: Arc<Mutex<Settings>>,
-    ) -> egui_tiles::Tree<Pane> {
+    pub fn create_tree(settings: Arc<Mutex<Settings>>) -> egui_tiles::Tree<Pane> {
         let mut next_view_nr = 0;
         let gen_pane = || {
             let pane = Pane {
@@ -29,30 +25,27 @@ impl TreeBehavior {
             next_view_nr += 1;
             pane
         };
-    
+
         let mut tiles = egui_tiles::Tiles::default();
-    
+
         let mut tabs = vec![];
-    
+
         let render_pane = Pane {
             nr: 0,
             kind: PaneType::Render(()),
         };
         tabs.push(tiles.insert_pane(render_pane));
-    
+
         tabs.push(tiles.insert_pane(gen_pane()));
-    
-    
-       // let root = tiles.insert_tab_tile(tabs);
+
+        // let root = tiles.insert_tab_tile(tabs);
         let root = tiles.insert_horizontal_tile(tabs);
-    
-        egui_tiles::Tree::new("strelka_tree", root, tiles)    
+
+        egui_tiles::Tree::new("strelka_tree", root, tiles)
     }
-    
 }
 
 impl egui_tiles::Behavior<Pane> for TreeBehavior {
-
     fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
         format!("Pane {}", pane.nr).into()
     }
@@ -97,7 +90,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                         egui::Slider::new(&mut settings.scattering, 0.0..=0.5).text("scattering"),
                     );
                     ui.add(
-                       egui::Slider::new(&mut settings.lightness, 1.0..=20.0).text("lightness"),
+                        egui::Slider::new(&mut settings.lightness, 1.0..=20.0).text("lightness"),
                     );
                     ui.add(
                         egui::Slider::new(&mut settings.ray_marching_step, 0.6..=10.0)
@@ -111,8 +104,6 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
             }
             PaneType::Render(_rx) => {
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
-
-
                     let width = SCREEN_SIZE[0] as f32;
                     let height = SCREEN_SIZE[1] as f32;
 
@@ -127,8 +118,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 
                     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
                         rect,
-                        RenderViewCallback {
-                        },
+                        RenderViewCallback {},
                     ));
                 });
             }

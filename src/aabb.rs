@@ -1,5 +1,4 @@
-use bytemuck::{Zeroable, Pod};
-
+use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -10,6 +9,6 @@ pub struct Aabb {
 
 impl Aabb {
     pub fn new(min: [f32; 4], max: [f32; 4]) -> Self {
-        Self{min,max}
+        Self { min, max }
     }
 }

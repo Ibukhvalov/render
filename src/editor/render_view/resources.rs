@@ -1,14 +1,13 @@
+use crate::editor::settings::Settings;
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu;
 use std::sync::{Arc, Mutex};
-use crate::editor::settings::Settings;
-
 
 #[repr(C)]
 #[derive(Pod, Zeroable, Clone, Copy)]
 pub struct Uniforms {
     color: [f32; 4],
-    camera_to_world: [[f32;4]; 4],
+    camera_to_world: [[f32; 4]; 4],
     light_dir: [f32; 4],
     light_col: [f32; 4],
     absorption: f32,
@@ -18,7 +17,6 @@ pub struct Uniforms {
     //samples_per_pixel: u32,
 }
 
-
 pub struct FullScreenTriangleRenderResources {
     pub blit_pipeline: wgpu::RenderPipeline,
     pub blit_bind_group: wgpu::BindGroup,
@@ -26,7 +24,7 @@ pub struct FullScreenTriangleRenderResources {
     pub compute_bind_group: wgpu::BindGroup,
 
     pub settings: Arc<Mutex<Settings>>,
-    pub uniforms_buffer: wgpu::Buffer
+    pub uniforms_buffer: wgpu::Buffer,
 }
 
 impl FullScreenTriangleRenderResources {
@@ -40,7 +38,7 @@ impl FullScreenTriangleRenderResources {
                 camera_to_world: camera_to_world.to_cols_array_2d(),
                 g: settings.g,
                 light_col: [light_color.x, light_color.y, light_color.z, 1.0],
-                light_dir: [1.0,1.0,1.0, 1.0],
+                light_dir: [1.0, 1.0, 1.0, 1.0],
                 absorption: settings.absorption,
                 scattering: settings.scattering,
                 step_size: settings.ray_marching_step,
@@ -48,15 +46,13 @@ impl FullScreenTriangleRenderResources {
             };
 
             queue.write_buffer(&self.uniforms_buffer, 0, bytemuck::bytes_of(&uniforms));
-
         }
-
     }
 
     pub fn paint(&self, render_pass: &mut wgpu::RenderPass<'_>) {
         // Draw our triangle!
-            render_pass.set_pipeline(&self.blit_pipeline);
-            render_pass.set_bind_group(0, &self.blit_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
+        render_pass.set_pipeline(&self.blit_pipeline);
+        render_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
     }
 }
