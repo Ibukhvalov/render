@@ -2,7 +2,6 @@ use bytemuck::{Pod, Zeroable};
 use vdb_rs::Grid;
 use crate::aabb::Aabb;
 
-const BASE_WEIGHT: f32 = 0.1;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -10,7 +9,6 @@ pub struct VolumeGridStatic {
     size: [u32; 4],
     shift: [i32; 4],
     bbox: Aabb,
-    //weights: Vec<Vec<Vec<f32>>>,
 }
 
 pub struct PackedBoolArray { 
@@ -48,11 +46,6 @@ impl VolumeGridStatic {
     pub fn build_from_vdb_grid(vdb_grid: Grid<half::f16>) -> (Self, Vec<u32>) {
         let min_i = vdb_grid.descriptor.aabb_min().unwrap();
         let max_i = vdb_grid.descriptor.aabb_max().unwrap();
-
-        let bbox = Aabb::new(
-            [min_i.x as f32, min_i.y as f32, min_i.z as f32, 0f32],
-            [max_i.x as f32, max_i.y as f32, max_i.z as f32, 0f32],
-        );
     
         let length = max_i - min_i;
         let size = [length[0] as u32 + 1u32, length[1] as u32 + 1u32, length[2] as u32 + 1u32];
