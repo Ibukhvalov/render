@@ -15,7 +15,7 @@ use tree_behaviour::TreeBehavior;
 use settings::Settings;
 use view::View;
 
-use crate::CAMERA_SPEED;
+use crate::{CAMERA_MOVE_SPEED, CAMERA_ROTATION_SPEED};
 
 
 pub struct Editor {
@@ -62,17 +62,17 @@ impl Editor {
                 Key::Q => -up_dir,
                 Key::E => up_dir,
                 _ => Vec3::ZERO,
-            } * CAMERA_SPEED;
+            } * CAMERA_MOVE_SPEED;
             
             self.camera_to_world.rotation_x *= match key {
-                Key::ArrowUp => Quat::from_rotation_x(-0.01f32),
-                Key::ArrowDown => Quat::from_rotation_x(0.01f32),
+                Key::ArrowUp => Quat::from_rotation_x(-0.01f32 * CAMERA_ROTATION_SPEED),
+                Key::ArrowDown => Quat::from_rotation_x(0.01f32 * CAMERA_ROTATION_SPEED),
                 _ => Quat::IDENTITY,
             };
 
             self.camera_to_world.rotation_y *= match key {
-                Key::ArrowRight => Quat::from_rotation_y(0.01f32),
-                Key::ArrowLeft => Quat::from_rotation_y(-0.01f32),
+                Key::ArrowRight => Quat::from_rotation_y(0.01f32 * CAMERA_ROTATION_SPEED),
+                Key::ArrowLeft => Quat::from_rotation_y(-0.01f32 * CAMERA_ROTATION_SPEED),
                 _ => Quat::IDENTITY,
             };
                 

@@ -10,7 +10,8 @@ use eframe::wgpu;
 use std::sync::Arc;
 
 const SCREEN_SIZE: [u32; 2] = [800u32, 600u32];
-const CAMERA_SPEED: f32 = 2f32;
+const CAMERA_MOVE_SPEED: f32 = 2f32;
+const CAMERA_ROTATION_SPEED: f32 = 2f32;
 const WORKGROUP_SIZE: [u32; 2] = [16u32, 16u32];
 
 
