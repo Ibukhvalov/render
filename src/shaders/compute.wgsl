@@ -5,7 +5,7 @@ var output_texture: texture_storage_2d<rgba8unorm, write>;
 var<storage, read> volume_grid: VolumeGridStatic;
 
 @group(0) @binding(2)
-var<storage, read> weights: array<f32>;
+var<storage, read> weights: array<u32>;
 
 @group(0) @binding(3)
 var<uniform> uniforms: Uniforms;
@@ -18,6 +18,9 @@ const INF = 99999.0;
 const ratio = width / height;
 
 const PI: f32 = 3.14159265358979323846;
+
+const BASE_WEIGHT: f32 = 0.1;
+
 
 struct Uniforms {
     color: vec4f,
@@ -70,6 +73,8 @@ fn create_ray(origin: vec3f, dir: vec3f) -> Ray {
     return Ray(vec4f(origin, 1.0), vec4f(normalize(dir), 0.0));
 }
 
+
+
 fn hit_aabb(aabb: Aabb, ray: Ray) -> Interval {
     let ray_orig = ray.origin.xyz;
     let ray_dir = ray.direction.xyz;
@@ -108,7 +113,14 @@ fn get_weight(pos: vec3f) -> f32 {
     }
 
     let linear_index = pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y;
-    return weights[linear_index];
+    let block_index = linear_index / 32u;
+    let bit_index = linear_index % 32u;
+    let current_block = weights[block_index];
+
+    if(((current_block >> (31u - bit_index)) & 1u) == 1u) {
+        return BASE_WEIGHT;
+    }
+    return 0.0;
 }
 
 fn get_color(ray: Ray) -> RayRecord {
@@ -117,41 +129,48 @@ fn get_color(ray: Ray) -> RayRecord {
         return RayRecord(1.0, vec3f(0.0));
     }
 
+    var step_size = uniforms.step_size;
+    var sigma = uniforms.scattering + uniforms.absorption;
+
     var transparency = 1.0;
     var result = vec3f(0.0);
-    let ns = u32(floor(((interval.end - interval.start) / uniforms.step_size) + 0.5));
+    let ns = u32(floor(((interval.end - interval.start) / step_size) + 0.5));
 
     for (var n = 0u; n < ns; n++) {
-        if transparency <= 0.001 {
+        if transparency <= 0.005 {
             break;
         }
 
-        let t = interval.start + uniforms.step_size * (f32(n) + 0.5);
+        let t = interval.start + step_size * (f32(n) + 0.5);
         let sample_pos = ray_at(ray, t);
-        let sample_weight = get_weight(sample_pos);
+        var sample_weight = 0.0;
+        
+        sample_weight = get_weight(sample_pos);
+        
+        
 
         if sample_weight > 0.0 {
-            let sample_transparency = exp(-uniforms.step_size * sample_weight * (uniforms.scattering + uniforms.absorption));
+            let sample_transparency = exp(-step_size * sample_weight * (sigma));
             transparency *= sample_transparency;
 
             //light            
             let ray_light = create_ray(sample_pos, uniforms.light_dir.xyz);
             let interval_light = hit_aabb(volume_grid.bbox, ray_light);
             if interval_light.start < interval_light.end {
-                let ns_light = u32(floor((interval_light.end / uniforms.step_size) + 0.5));
+                let ns_light = u32(floor((interval_light.end / step_size) + 0.5));
 
                 var density_light = 0.0;
 
                 for (var nl = 0u; nl < ns_light; nl++) {
-                    let t_light = min(f32(nl) * uniforms.step_size, interval_light.end);
+                    let t_light = min(f32(nl) * step_size, interval_light.end);
                     let sample_pos_light = ray_at(ray_light, t_light);
                     let sample_weight_light = get_weight(sample_pos_light);
                     density_light += sample_weight_light;
                 }
 
-                let light_ray_attenutation = exp(-density_light * uniforms.step_size * (uniforms.absorption + uniforms.scattering));
-                let cos_theta = dot(ray.direction.xyz, -uniforms.light_dir.xyz) / (length(ray.direction.xyz) * length(uniforms.light_dir.xyz));
-                result += uniforms.light_col.xyz * light_ray_attenutation * uniforms.scattering * transparency * uniforms.step_size * sample_weight * phase(cos_theta);
+                let light_ray_attenutation = exp(-density_light * step_size * sigma);
+                let cos_theta = dot(ray.direction, -uniforms.light_dir) / (length(ray.direction) * length(uniforms.light_dir));
+                result += uniforms.light_col.xyz * light_ray_attenutation * uniforms.scattering * transparency * step_size * sample_weight * phase(cos_theta);
             }
         }
     }
@@ -169,12 +188,14 @@ fn get_ray(u: f32, v: f32) -> Ray {
         normalize(uniforms.camera_to_world * vec4f((u * 2.0 - 1.0) * ratio, -(v * 2.0 - 1.0), 1.0, 0.0)));
 }
 
+
 @compute
-@workgroup_size(1)
+@workgroup_size(16,16)
 fn main(@builtin(global_invocation_id) global_id: vec3u) {
     let u = f32(global_id.x) / width;
     let v = f32(global_id.y) / height;
     let ray = get_ray(u, v);
     let rec = get_color(ray);
+    
     textureStore(output_texture, global_id.xy, uniforms.color * rec.transparency + vec4f(rec.color, 1.0));
 }
