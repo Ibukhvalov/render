@@ -41,10 +41,6 @@ pub struct PackedBoolArray {
  
        Self { data }
     }
-
-    fn as_slice(&self) -> &[u32] {
-        self.data.as_slice()
-    }
  }
 
 

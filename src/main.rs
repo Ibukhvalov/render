@@ -8,11 +8,12 @@ use std::sync::{Arc, Mutex};
 use eframe::egui_wgpu::{self, wgpu};
 use eframe::wgpu::util::DeviceExt;
 use eframe::wgpu::{include_wgsl, BufferUsages, ComputePassDescriptor};
-use egui::{Key};
+use egui::Key;
 use glam::{Mat4, Quat, Vec3};
 use bytemuck::{Pod, Zeroable};
 
 const SCREEN_SIZE: [u32; 2] = [800u32, 600u32];
+const CAMERA_SPEED: f32 = 2f32;
 
 #[repr(C)]
 #[derive(Pod, Zeroable, Clone, Copy)]
@@ -25,22 +26,13 @@ pub struct Uniforms {
     scattering: f32,
     g: f32,
     step_size: f32,
-    //samples_per_pixel: u16,
+    //samples_per_pixel: u32,
 }
 
-/*color: vec4f,
-    camera_to_world: mat4x4f,
-    light_dir: vec3f,
-    light_col: vec3f,
-    absorption: f32,
-    scattering: f32,
-    g: f32,
-    step_size: f32, */
-    
+
 mod aabb;
 mod volume_grid;
 
-use log::debug;
 use volume_grid::VolumeGridStatic;
 
 struct RenderView {}
@@ -66,7 +58,7 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
             });
             compute_pass.set_pipeline(&resources.compute_pipeline);
             compute_pass.set_bind_group(0, &resources.compute_bind_group, &[]);
-            compute_pass.dispatch_workgroups(SCREEN_SIZE[0], SCREEN_SIZE[1], 1);
+            compute_pass.dispatch_workgroups(SCREEN_SIZE[0]/16, SCREEN_SIZE[1]/16, 1);
         }
 
         resources.prepare(device, queue); // TODO: pass screen dims here
@@ -408,7 +400,7 @@ struct Settings {
     g: f32,
     absorption: f32,
     scattering: f32,
-    //spp: u16,
+    spp: u32,
     ray_marching_step: f32,
     picked_path: Option<String>,
     matrix: Mat4,
@@ -424,7 +416,7 @@ impl Settings {
                 absorption: 0.02,
                 scattering: 0.4,
                 ray_marching_step: 10f32,
-                //spp: 1u16,
+                spp: 1u32,
                 picked_path: None,
                 matrix: Mat4::IDENTITY,
         }
@@ -501,18 +493,9 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                 }
                 // ui.color_edit_button_rgb(color);
             }
-            PaneType::Render(rx) => {
-                // ui.checkbox(&mut self.checked, "Checked");
+            PaneType::Render(_rx) => {
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                    // self.viewport.ui(ui);
-                    // let color = egui::epaint::Hsva::new(0.103 * pane.nr as f32, 0.5, 0.5, 1.0);
-                    // ui.painter().rect_filled(ui.max_rect(), 0.0, color);
 
-                    // let rect = ui.max_rect();
-                    // let response = ui.allocate_rect(rect, egui::Sense::drag());
-
-                    let width = ui.max_rect().width();
-                    let heigth = ui.max_rect().height();
 
                     let width = SCREEN_SIZE[0] as f32;
                     let height = SCREEN_SIZE[1] as f32;
@@ -548,7 +531,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
 }
 
 struct Editor {
-    viewport: Option<RenderView>,
+    _viewport: Option<RenderView>,
     tree: egui_tiles::Tree<Pane>,
     settings: Arc<Mutex<Settings>>,
     camera_to_world: View,
@@ -584,7 +567,7 @@ impl Editor {
 
         let tree = create_tree(settings.clone());
         Self {
-            viewport: RenderView::new(_cc, width, height, settings.clone()),
+            _viewport: RenderView::new(_cc, width, height, settings.clone()),
             tree,
             settings: settings.clone(),
             camera_to_world: View::default(),
@@ -609,7 +592,7 @@ impl Editor {
                 Key::Q => -up_dir,
                 Key::E => up_dir,
                 _ => Vec3::ZERO,
-            };
+            } * CAMERA_SPEED;
             
             self.camera_to_world.rotation_x *= match key {
                 Key::ArrowUp => Quat::from_rotation_x(-0.01f32),
@@ -632,7 +615,7 @@ impl Editor {
 
     
 
-    fn handle_mouse(&mut self, pointer: egui::PointerState) {
+    fn handle_mouse(&mut self, _pointer: egui::PointerState) {
         //self.camera_to_world.rotation_x *= Quat::from_rotation_y(pointer.delta().x * 0.002);
         //self.camera_to_world.rotation_y *= Quat::from_rotation_x(pointer.delta().y * 0.002);
     }
