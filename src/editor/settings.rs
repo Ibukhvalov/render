@@ -8,11 +8,11 @@ pub struct Settings {
     pub g: f32,
     pub absorption: f32,
     pub scattering: f32,
-    pub _spp: u32,
     pub ray_marching_step: f32,
     pub picked_path: Option<String>,
     pub matrix: Mat4,
     pub fps_ctrl: FPSController,
+    pub sub_frame_index: i32,
 }
 
 impl Settings {
@@ -25,10 +25,10 @@ impl Settings {
             absorption: 0.02,
             scattering: 0.4,
             ray_marching_step: 10f32,
-            _spp: 1u32,
             picked_path: None,
             matrix: Mat4::IDENTITY,
             fps_ctrl: FPSController::default(),
+            sub_frame_index: -1i32,
         }
     }
 }

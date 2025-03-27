@@ -17,7 +17,7 @@ const WORKGROUP_SIZE: [u32; 2] = [16u32, 16u32];
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt::init();
 
-    let options = egui_wgpu::WgpuConfiguration {
+    let wgpu_options = egui_wgpu::WgpuConfiguration {
         device_descriptor: Arc::new(|adapter| {
             let base_limits = if adapter.get_info().backend == wgpu::Backend::Gl {
                 wgpu::Limits::downlevel_webgl2_defaults()
@@ -30,6 +30,7 @@ fn main() -> Result<(), eframe::Error> {
                 required_features: wgpu::Features::FLOAT32_FILTERABLE,
                 memory_hints: wgpu::MemoryHints::Performance,
                 required_limits: wgpu::Limits {
+                    
                     // When using a depth buffer, we have to be able to create a texture
                     // large enough for the entire surface, and we want to support 4k+ displays.
                     max_texture_dimension_2d: 8192,
@@ -40,10 +41,12 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     let options = eframe::NativeOptions {
+        //multisampling: 4,
+        vsync: false,
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([SCREEN_SIZE[0] as f32, SCREEN_SIZE[1] as f32]),
         renderer: eframe::Renderer::Wgpu,
-        wgpu_options: options,
+        wgpu_options,
         ..Default::default()
     };
 

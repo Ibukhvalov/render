@@ -24,6 +24,7 @@ pub struct Editor {
     tree: egui_tiles::Tree<tree_behaviour::Pane>,
     settings: Arc<Mutex<Settings>>,
     camera_to_world: View,
+    is_view_changed: bool,
 }
 
 impl Editor {
@@ -40,6 +41,7 @@ impl Editor {
             tree,
             settings: settings.clone(),
             camera_to_world: View::default(),
+            is_view_changed: true,
         }
     }
 
@@ -50,7 +52,7 @@ impl Editor {
         let right_dir = (rotation * Vec3::X).normalize();
         let up_dir = (Vec3::Y).normalize();
 
-        for key in keys {
+        for key in &keys {
             self.camera_to_world.translation += match key {
                 Key::W => view_dir,
                 Key::S => -view_dir,
@@ -74,7 +76,8 @@ impl Editor {
             };
         }
 
-        self.send_camera_matrix();
+        self.is_view_changed = !keys.is_empty();
+
     }
 
     fn handle_mouse(&mut self, _pointer: egui::PointerState) {
@@ -82,12 +85,18 @@ impl Editor {
         //self.camera_to_world.rotation_y *= Quat::from_rotation_x(pointer.delta().y * 0.002);
     }
 
-    fn send_camera_matrix(&self) {
-        let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
+    fn send_data(&self) {
         if let Ok(mut settings) = self.settings.lock() {
+            let rotation = self.camera_to_world.rotation_y * self.camera_to_world.rotation_x;
             settings.matrix =
-                Mat4::from_rotation_translation(rotation, self.camera_to_world.translation)
+                Mat4::from_rotation_translation(rotation, self.camera_to_world.translation);
+            if self.is_view_changed {
+                settings.sub_frame_index = 0;
+            } else {
+                settings.sub_frame_index += 1;
+            }
         }
+        
     }
 }
 
@@ -99,7 +108,7 @@ impl eframe::App for Editor {
         if let Ok(mut settings) = self.settings.try_lock() {
             settings.fps_ctrl.update();
         }
-
+        self.send_data();
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
             egui::menu::bar(ui, |ui| {

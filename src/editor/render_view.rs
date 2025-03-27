@@ -4,6 +4,7 @@ use super::settings::Settings;
 use crate::volume_grid::VolumeGridStatic;
 use eframe::wgpu::include_wgsl;
 use eframe::wgpu::{self, util::DeviceExt, BufferUsages};
+use glam::Vec3A;
 use resources::*;
 use std::fs::File;
 use std::io::BufReader;
@@ -55,6 +56,16 @@ impl egui_wgpu::CallbackTrait for RenderViewCallback {
         resources.paint(render_pass);
     }
 }
+
+#[repr(C)]
+struct AccCtxTemplate {
+    color: Vec3A,
+    transparency: f32,
+    t_start: f32,
+    t_end: f32,
+}
+
+
 
 impl RenderView {
     pub fn new<'a>(
@@ -124,6 +135,13 @@ impl RenderView {
             label: Some("Weights buffer"),
             contents: bytemuck::cast_slice(weights.as_slice()),
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
+        });
+
+        let acc_ctx_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Accumulation buffer"),
+            size: std::mem::size_of::<AccCtxTemplate>() as u64 * (SCREEN_SIZE[0] * SCREEN_SIZE[1]) as u64,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
         });
 
         let result_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -203,6 +221,16 @@ impl RenderView {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -245,6 +273,12 @@ impl RenderView {
                     binding: 3,
                     resource: wgpu::BindingResource::Buffer(
                         uniforms_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Buffer(
+                        acc_ctx_buffer.as_entire_buffer_binding(),
                     ),
                 },
             ],
@@ -299,11 +333,7 @@ impl RenderView {
                 ..Default::default()
             },
             depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
         });

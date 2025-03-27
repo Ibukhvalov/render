@@ -103,6 +103,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                 // ui.color_edit_button_rgb(color);
             }
             PaneType::Render(_rx) => {
+                
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
                     let width = SCREEN_SIZE[0] as f32;
                     let height = SCREEN_SIZE[1] as f32;
@@ -116,7 +117,7 @@ impl egui_tiles::Behavior<Pane> for TreeBehavior {
                     // TODO: pass input to camera controller
                     response.has_focus();
 
-                    ui.painter().add(egui_wgpu::Callback::new_paint_callback(
+                    ui.painter().add( egui_wgpu::Callback::new_paint_callback(
                         rect,
                         RenderViewCallback {},
                     ));

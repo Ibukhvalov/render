@@ -6,15 +6,16 @@ use std::sync::{Arc, Mutex};
 #[repr(C)]
 #[derive(Pod, Zeroable, Clone, Copy)]
 pub struct Uniforms {
-    color: [f32; 4],
     camera_to_world: [[f32; 4]; 4],
-    light_dir: [f32; 4],
-    light_col: [f32; 4],
-    absorption: f32,
+    color: [f32; 4],
+    _alignment1: [f32; 1],
+    light_dir: [f32; 3],
+    light_col: [f32; 3],
     scattering: f32,
+    absorption: f32,
     g: f32,
     step_size: f32,
-    //samples_per_pixel: u32,
+    sub_frame_index: i32,
 }
 
 pub struct FullScreenTriangleRenderResources {
@@ -29,20 +30,23 @@ pub struct FullScreenTriangleRenderResources {
 
 impl FullScreenTriangleRenderResources {
     pub fn prepare(&self, _device: &wgpu::Device, queue: &wgpu::Queue) {
+
         if let Ok(settings) = self.settings.lock() {
             let color = settings.background_color;
             let camera_to_world = settings.matrix;
-            let light_color = settings.light_color * settings.lightness;
+            let light_color = (settings.light_color * settings.lightness).to_array();
             let uniforms = Uniforms {
                 color: [color[0], color[1], color[2], 1f32],
                 camera_to_world: camera_to_world.to_cols_array_2d(),
                 g: settings.g,
-                light_col: [light_color.x, light_color.y, light_color.z, 1.0],
-                light_dir: [1.0, 1.0, 1.0, 1.0],
+                light_col: light_color,
+                light_dir: [1.0, 1.0, 1.0],
                 absorption: settings.absorption,
                 scattering: settings.scattering,
                 step_size: settings.ray_marching_step,
-                //samples_per_pixel: settings.spp,
+                
+                _alignment1: [0f32],
+                sub_frame_index: settings.sub_frame_index,
             };
 
             queue.write_buffer(&self.uniforms_buffer, 0, bytemuck::bytes_of(&uniforms));
