@@ -113,14 +113,13 @@ fn get_weight(pos: vec3f) -> f32 {
     }
 
     let linear_index = pos3u.z + pos3u.y * size.z + pos3u.x * size.z * size.y;
-    let block_index = linear_index / 32u;
-    let bit_index = linear_index % 32u;
+    let block_index = linear_index / 4u;
+    let num_index = linear_index % 4u;
     let current_block = weights[block_index];
 
-    if(((current_block >> (31u - bit_index)) & 1u) == 1u) {
-        return BASE_WEIGHT;
-    }
-    return 0.0;
+    let weigth = (current_block >> (24u - num_index * 8u) & 255u);
+
+    return f32(weigth) / f32(255u);
 }
 
 fn get_color(ray: Ray) -> RayRecord {
@@ -187,7 +186,6 @@ fn get_ray(u: f32, v: f32) -> Ray {
     return Ray(uniforms.camera_to_world * vec4f(0.0, 0.0, 0.0, 1.0),
         normalize(uniforms.camera_to_world * vec4f((u * 2.0 - 1.0) * ratio, -(v * 2.0 - 1.0), 1.0, 0.0)));
 }
-
 
 @compute
 @workgroup_size(16,16)

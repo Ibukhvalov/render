@@ -1,3 +1,7 @@
+use std::io::Write;
+
+use std::fs::File;
+
 use crate::aabb::Aabb;
 use bytemuck::{Pod, Zeroable};
 use vdb_rs::Grid;
@@ -15,27 +19,34 @@ pub struct PackedBoolArray {
 }
 
 impl PackedBoolArray {
-    fn from_bool_array(bool_array: &[bool]) -> Self {
-        let size = bool_array.len() / 32usize;
+    fn from_array(array: &[half::f16], max: f32) -> Self {
+        let size = array.len() / 8usize;
         let mut data = Vec::with_capacity(size);
 
-        let mut current_pack = 0u32;
-        let mut current_bit_index = 0u32;
+        let mut current_block = 0u32;
+        let mut current_block_pos = 0u32;
 
-        for &b in bool_array {
-            if current_bit_index == 32u32 {
-                data.push(current_pack);
-                current_bit_index = 0u32;
-                current_pack = 0u32;
+        for &num in array {
+            if current_block_pos == 4u32 {
+                data.push(current_block);
+                current_block = 0u32;
+                current_block_pos = 0u32;
             }
-            let current_bit = (b as u32) << (31u32 - current_bit_index);
-            current_pack |= current_bit;
-            current_bit_index += 1;
+            let shifted_number = (Self::normalize(num, max) as u32) << (24u32 - current_block_pos*8u32);
+            current_block |= shifted_number;
+            current_block_pos += 1;
+        }
+        if current_block_pos > 0u32 {
+            data.push(current_block);
         }
 
-        data.push(current_pack);
-
         Self { data }
+    }
+
+    fn normalize(float_num: half::f16, max: f32) -> u8 {
+        let native_float = float_num.to_f32();
+        let normalized_float = native_float.clamp(0f32, max);
+        (normalized_float*255f32/max).round() as u8
     }
 }
 
@@ -59,18 +70,21 @@ impl VolumeGridStatic {
 
         let mut weights =
             vec![
-                vec![vec![false; length.z as usize + 1usize]; length.y as usize + 1usize];
+                vec![vec![half::f16::default(); length.z as usize + 1usize]; length.y as usize + 1usize];
                 length.x as usize + 1usize
             ];
-
-        for (pos, _voxel, _level) in vdb_grid.iter() {
+        let mut max_weight = 0f32;
+ 
+        for (pos, voxel, _level) in vdb_grid.iter() {
+            max_weight = f32::max(max_weight, voxel.to_f32());
             weights[(pos.x.floor() + shift[0] as f32) as usize]
                 [(pos.y.floor() + shift[1] as f32) as usize]
-                [(pos.z.floor() + shift[2] as f32) as usize] = true;
+                [(pos.z.floor() + shift[2] as f32) as usize] = voxel;
         }
 
-        let flattened_weights: Vec<bool> = weights.into_iter().flatten().flatten().collect();
-        let packed_array = PackedBoolArray::from_bool_array(flattened_weights.as_slice());
+
+        let flattened_weights: Vec<half::f16> = weights.into_iter().flatten().flatten().collect();
+        let packed_array = PackedBoolArray::from_array(flattened_weights.as_slice(), max_weight);
 
         (
             Self {
