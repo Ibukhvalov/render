@@ -108,6 +108,7 @@ impl eframe::App for Editor {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
                             if let Ok(mut settings) = self.settings.lock() {
                                 settings.picked_path = Some(path.display().to_string());
+
                             }
                         }
                     }
