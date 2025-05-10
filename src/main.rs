@@ -1,5 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-
 mod aabb;
 mod editor;
 mod volume_grid;
@@ -30,6 +28,7 @@ fn main() -> Result<(), eframe::Error> {
                 required_features: wgpu::Features::FLOAT32_FILTERABLE,
                 memory_hints: wgpu::MemoryHints::Performance,
                 required_limits: wgpu::Limits {
+                    max_storage_buffer_binding_size: 200000000,
                     // When using a depth buffer, we have to be able to create a texture
                     // large enough for the entire surface, and we want to support 4k+ displays.
                     max_texture_dimension_2d: 8192,
