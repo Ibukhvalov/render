@@ -29,6 +29,7 @@ Adjust the size of probing inside a volume. Be aware about high performance effe
 ### g (phase function)
 Define direction of distribution of light inside volume.
 Default function is **Henyey-Greenstein**
+
 <img width="301" alt="image" src="https://github.com/user-attachments/assets/2f2b9757-577e-4536-b83d-3afb6249316b" />
 
 
