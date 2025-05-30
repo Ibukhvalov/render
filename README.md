@@ -29,9 +29,8 @@ Adjust the size of probing inside a volume. Be aware about high performance effe
 ### g (phase function)
 Define direction of distribution of light inside volume.
 Default function is **Henyey-Greenstein**
-$$
-P(\cos \theta) = \frac{1}{4\pi} \cdot \frac{1 - g^2}{(1 + g^2 - 2g\cos\theta)^{3/2}}
-$$
+<img width="301" alt="image" src="https://github.com/user-attachments/assets/2f2b9757-577e-4536-b83d-3afb6249316b" />
+
 
 - $\theta$ — the angle between the incoming and outgoing light directions  
 - $g$ — the asymmetry parameter ($-1 \leq g \leq 1$)
