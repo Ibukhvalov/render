@@ -1,9 +1,10 @@
-Interactive app for displaying VDB files with various settings using **Ray-Marching** algorithm.
+### Interactive app for displaying VDB files with various settings using **Ray-Marching** algorithm.
 
 
 # Requirement
 - **Rust**
 
+# Deploy
 ```
 git clone https://github.com//Ibukhvalov/render
 cd render
